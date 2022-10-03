@@ -1,0 +1,5 @@
+{
+    "clang-format.executable": "/opt/homebrew/bin/clang-format",
+    "clang-format.style": "file",
+    "clang-format.language.c.fallbackStyle": "file"
+}
