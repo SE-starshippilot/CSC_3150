@@ -1,6 +1,5 @@
 .DS_Store
-EssentialC.pdf
-*.zip
 *
-!/**/
+!/**/*.*
 !*.*
+EssentialC.pdf
