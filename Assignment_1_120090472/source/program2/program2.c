@@ -72,7 +72,12 @@ static int __init program2_init(void)
 	/* write your code here */
 
 	/* create a kernel thread to run my_fork */
-
+	static struct *task_struct my_fork_task;
+	my_fork_task = kthread_run(my_fork, NULL, "my_fork");
+	if (my_fork_task){
+		
+	}
+	
 	return 0;
 }
 
