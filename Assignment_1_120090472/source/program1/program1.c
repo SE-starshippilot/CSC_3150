@@ -113,15 +113,21 @@ int main(int argc, char *argv[])
 		if (WIFEXITED(status)) {
 			printf("Normal termination with EXIT STATUS = %d\n",
 			       WEXITSTATUS(status));
+			return 0;
 		} else if (WIFSTOPPED(status)) {
 			printf("Child process STOPPED by signal %s\n",
 			       getsig(WSTOPSIG(status)));
+			return 1;
 		} else if (WIFSIGNALED(status)) {
 			printf("Child process TERMINATED by signal %s\n",
 			       getsig(WTERMSIG(status)));
+			return 1;
 		} else if (WIFCONTINUED(status)) {
 			printf("Child process CONTINUED\n");
+			return 1;
+		} else {
+			printf("Child process has Unknown termination status\n");
+			return 1;
 		}
 	}
-	return 0;
 }
