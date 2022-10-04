@@ -40,13 +40,18 @@ int main(int argc, char *argv[]) {
     printf("Parent process received SIGCHILD signal\n");
     if (WIFEXITED(status)) {
       printf("Normal termination with EXIT STATUS = %d\n", WEXITSTATUS(status));
+      return 1;
     } else if (WIFSTOPPED(status)) {
       printf("Child process STOPPED by signal %d\n", WSTOPSIG(status));
+      return 1;
     } else if (WIFSIGNALED(status)) {
       printf("Child process TERMINATED by signal %d\n", WTERMSIG(status));
     } else if (WIFCONTINUED(status)) {
       printf("Child process CONTINUED\n");
+      return 0;
+    } else{ /* should not reach here */
+      printf("Child process has UNKNOWN STATUS\n");
+      return 1;
     }
   }
-  return 0;
 }
