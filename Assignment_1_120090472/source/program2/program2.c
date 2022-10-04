@@ -12,43 +12,65 @@
 
 MODULE_LICENSE("GPL");
 
+#define FORK(stack_start)                                                      \
+	do_fork(SIGCHLD, stack_start, NULL, 0, NULL,                           \
+		NULL) // the do_fork is extern
+
+struct wait_ops {
+	enum pid_type wo_type;
+	int wo_flags;
+	struct pid *wo_pid;
+	struct waitid_info *wo_info;
+	int wo_stat;
+	struct rusage *wo_rusage;
+	wait_queue_t child_wait;
+	int notask_error;
+}
+
+extern long do_wait(struct wait_ops *wo);
+extern struct filename *getname(const char __user *filename);
 
 //implement fork function
-int my_fork(void *argc){
-	
-	
+int my_fork(void *argc)
+{
 	//set default sigaction for current process
 	int i;
 	struct k_sigaction *k_action = &current->sighand->action[0];
-	for(i=0;i<_NSIG;i++){
+	for (i = 0; i < _NSIG; i++) {
 		k_action->sa.sa_handler = SIG_DFL;
 		k_action->sa.sa_flags = 0;
 		k_action->sa.sa_restorer = NULL;
 		sigemptyset(&k_action->sa.sa_mask);
 		k_action++;
 	}
-	
+
 	/* fork a process using kernel_clone or kernel_thread */
-	
+
 	/* execute a test program in child process */
-	
+
 	/* wait until child process terminates */
-	
+
 	return 0;
 }
 
-static int __init program2_init(void){
+void my_wait(pid_t pid, int *status)
+{
+	W_OPS wo;
+}
 
+static int __init program2_init(void)
+{
 	printk("[program2] : Module_init\n");
-	
+
 	/* write your code here */
-	
+
 	/* create a kernel thread to run my_fork */
-	
+
 	return 0;
 }
 
-static void __exit program2_exit(void){
+static void __exit program2_exit(void)
+{
 	printk("[program2] : Module_exit\n");
 }
 
