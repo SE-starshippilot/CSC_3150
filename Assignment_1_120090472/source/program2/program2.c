@@ -12,6 +12,8 @@
 
 MODULE_LICENSE("GPL");
 
+extern do_execve(struct filename *filename, const char *const argv[], const char *const envp[]);
+
 #define FORK(stack_start)                                                      \
 	do_fork(SIGCHLD, stack_start, NULL, 0, NULL,                           \
 		NULL) // the do_fork is extern
@@ -29,6 +31,11 @@ struct wait_ops {
 
 extern long do_wait(struct wait_ops *wo);
 extern struct filename *getname(const char __user *filename);
+
+int my_exec(void){
+	
+	return 0;
+}
 
 //implement fork function
 int my_fork(void *argc)
@@ -60,7 +67,7 @@ void my_wait(pid_t pid, int *status)
 
 static int __init program2_init(void)
 {
-	printk("[program2] : Module_init\n");
+	printk("[program2] : Module_init Tianhao SHI 120090472\n");
 
 	/* write your code here */
 
