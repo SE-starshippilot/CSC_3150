@@ -12,37 +12,84 @@
 
 MODULE_LICENSE("GPL");
 
-extern do_execve(struct filename *filename, const char *const argv[], const char *const envp[]);
+/* If WIFEXITED(STATUS), the low-order 8 bits of the status.  */
+#define	__WEXITSTATUS(status)	(((status) & 0xff00) >> 8)
 
-#define FORK(stack_start)                                                      \
-	do_fork(SIGCHLD, stack_start, NULL, 0, NULL,                           \
-		NULL) // the do_fork is extern
+/* If WIFSIGNALED(STATUS), the terminating signal.  */
+#define	__WTERMSIG(status)	((status) & 0x7f)
 
-struct wait_ops {
+/* If WIFSTOPPED(STATUS), the signal that stopped the child.  */
+#define	__WSTOPSIG(status)	__WEXITSTATUS(status)
+
+/* Nonzero if STATUS indicates normal termination.  */
+#define __WIFEXITED(status) (__WTERMSIG(status) == 0)
+
+/* Nonzero if STATUS indicates termination by a signal.  */
+#define __WIFSIGNALED(status) (((signed char) (((status) & 0x7f) + 1) >> 1) > 0)
+
+/* Nonzero if STATUS indicates the child is stopped.  */
+#define	__WIFSTOPPED(status)	(((status) & 0xff) == 0x7f)
+
+static struct task_struct *my_task;
+typedef struct wait_queue_entry wait_queue_entry_t;
+
+struct wait_opts {
 	enum pid_type wo_type;
 	int wo_flags;
 	struct pid *wo_pid;
-	struct waitid_info *wo_info;
-	int wo_stat;
+	struct signifo  *wo_info;
+	int  wo_stat;
 	struct rusage *wo_rusage;
-	wait_queue_t child_wait;
+	wait_queue_entry_t child_wait;
 	int notask_error;
+};	//cannot export struct, defined here.
+
+extern int do_execve(struct filename *filename, const char __user *const __user *__argv, const char __user *const __user *__envp);
+extern long do_wait(struct wait_opts *wo);	//exported from [kernel/exit.c](https://elixir.bootlin.com/linux/v5.15.50/source/kernel/exit.c#L1482)
+extern struct filename *getname_kernel(const char *filename);	// exported from [fs/namei.c](https://elixir.bootlin.com/linux/v5.15.50/source/fs/namei.c#L215)
+
+void my_wait(pid_t pid, int *status) {
+	int a;
+	struct wait_opts wo;
+	struct pid* wo_pid;
+	enum pid_type type = PIDTYPE_PID;
+	wo_pid = find_get_pid(pid);
+	wo.wo_type = type;
+	wo.wo_pid = wo_pid;
+	wo.wo_flags = WEXITED;
+	wo.wo_info = NULL;
+	wo.wo_stat = (int __user *)status;
+	wo.wo_rusage = NULL;
+
+	printk("status: %d\n", *status);
+	a = do_wait(&wo);
+	printk("Return value of do_wait: %d\n", a);
+	printk("Return signal of do_fork: %d\n", wo.wo_stat);
+	// put_pid(wo_pid);
+	return;
 }
 
-extern long do_wait(struct wait_ops *wo);
-extern struct filename *getname(const char __user *filename);
-
 int my_exec(void){
-	
-	return 0;
+	const char *path_to_file = "/home/vagrant/CSC_3150/Assignment_1_120090472/source/program2/test";
+	struct filename *files_stat_struct;
+	// const char __user *const __user argv[] = {NULL};
+	// const char __user *const __user envp[] = {NULL};
+	printk("[program2] : child process\n");
+	files_stat_struct = getname_kernel(path_to_file);
+	// printk("Return value of do_execve:%d\n", return_status);
+	return do_execve(getname_kernel(path_to_file), NULL, NULL); // refrence: https://piazza.com/class/l7r9eyyrpo86ds/post/79_f3;
 }
 
 //implement fork function
 int my_fork(void *argc)
 {
-	//set default sigaction for current process
 	int i;
+	int status, sig;
+	pid_t pid;
+	struct kernel_clone_args args;
 	struct k_sigaction *k_action = &current->sighand->action[0];
+	//set default sigaction for current process
+	printk("[program2] : module_init kthread start\n");
 	for (i = 0; i < _NSIG; i++) {
 		k_action->sa.sa_handler = SIG_DFL;
 		k_action->sa.sa_flags = 0;
@@ -50,34 +97,56 @@ int my_fork(void *argc)
 		sigemptyset(&k_action->sa.sa_mask);
 		k_action++;
 	}
-
+	args.flags = SIGCHLD;
+	args.stack = (unsigned long) &my_exec;
+	args.stack_size = 0;
+	args.parent_tid = NULL;
+	args.child_tid = NULL;
+	args.tls = 0;
 	/* fork a process using kernel_clone or kernel_thread */
-
-	/* execute a test program in child process */
-
+	pid = kernel_clone(&args);
+	if (pid){
+		/* parent process */
+		printk("[program2] : The child process has pid = %d\n", (int) pid);
+		printk("[program2] : This is the parent process, pid = %d\n", current->pid);
+	}else{
+		/* execute a test program in child process */
+		my_exec();
+	}
 	/* wait until child process terminates */
+	my_wait(pid, &status);
 
+	// printk("__WIFEXITED: %d\t __WIFSTOPPED: %d\t __WIFSIGNALED: %d", __WIFEXITED(status), __WIFSTOPPED(status), __WIFSIGNALED(status));
+	// printk("RETURN STATUS: %d\n", (unsigned int) status);
+	// if (__WIFEXITED(status)) {
+	// 	printk("[program2] : child process exited with status %d", __WEXITSTATUS(status));
+	// } else if (__WIFSTOPPED(status)){
+	// 	printk("[program2] : child process stopped with signal %d", __WSTOPSIG(status));
+	// 	return 1;
+	// } else if (__WIFSIGNALED(status)){
+	// 	sig = __WTERMSIG(status);
+	// 	printk("[program2] : child process terminated with signal %d", sig);
+	// 	return 1;
+	// } else {
+	// 	printk("[program2] : child process terminated abnormally");
+	// 	return 1;
+	// }
 	return 0;
-}
-
-void my_wait(pid_t pid, int *status)
-{
-	W_OPS wo;
 }
 
 static int __init program2_init(void)
 {
-	printk("[program2] : Module_init Tianhao SHI 120090472\n");
-
 	/* write your code here */
-
+	printk("[program2] : module_init Tianhao SHI 120090472\n");
 	/* create a kernel thread to run my_fork */
-	static struct *task_struct my_fork_task;
-	my_fork_task = kthread_run(my_fork, NULL, "my_fork");
-	if (my_fork_task){
-		
-	}
-	
+	my_task = kthread_create(my_fork, NULL, "program2");
+	if (!my_task){
+		printk("[program2] : kthread_run failed\n");
+		return -1;
+	}else{
+		printk("[program2] : module_init create kthread start\n");
+		wake_up_process(my_task);
+	}	
 	return 0;
 }
 
