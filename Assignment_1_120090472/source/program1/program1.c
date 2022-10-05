@@ -5,6 +5,78 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+char *getsig(const int sig)
+{
+	switch (sig) {
+	case 0:
+		return "SIGZERO";
+	case SIGHUP:
+		return "SIGHUP";
+	case SIGINT:
+		return "SIGINT";
+	case SIGQUIT:
+		return "SIGQUIT";
+	case SIGILL:
+		return "SIGILL";
+	case SIGTRAP:
+		return "SIGTRAP";
+	case SIGABRT:
+		return "SIGABRT";
+	case SIGBUS:
+		return "SIGBUS";
+	case SIGFPE:
+		return "SIGFPE";
+	case SIGKILL:
+		return "SIGKILL";
+	case SIGUSR1:
+		return "SIGUSR1";
+	case SIGSEGV:
+		return "SIGSEGV";
+	case SIGUSR2:
+		return "SIGUSR2";
+	case SIGPIPE:
+		return "SIGPIPE";
+	case SIGALRM:
+		return "SIGALRM";
+	case SIGTERM:
+		return "SIGTERM";
+	case SIGSTKFLT:
+		return "SIGSTKFLT";
+	case SIGCHLD:
+		return "SIGCHLD";
+	case SIGCONT:
+		return "SIGCONT";
+	case SIGSTOP:
+		return "SIGSTOP";
+	case SIGTSTP:
+		return "SIGTSTP";
+	case SIGTTIN:
+		return "SIGTTIN";
+	case SIGTTOU:
+		return "SIGTTOU";
+	case SIGURG:
+		return "SIGURG";
+	case SIGXCPU:
+		return "SIGXCPU";
+	case SIGXFSZ:
+		return "SIGXFSZ";
+	case SIGVTALRM:
+		return "SIGVTALRM";
+	case SIGPROF:
+		return "SIGPROF";
+	case SIGWINCH:
+		return "SIGWINCH";
+	case SIGIO:
+		return "SIGIO";
+	case SIGPWR:
+		return "SIGPWR";
+	case SIGSYS:
+		return "SIGSYS";
+	default:
+		return "UNKNOWN SIGNAL";
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	/* fork a child process */
@@ -41,15 +113,21 @@ int main(int argc, char *argv[])
 		if (WIFEXITED(status)) {
 			printf("Normal termination with EXIT STATUS = %d\n",
 			       WEXITSTATUS(status));
+			return 0;
 		} else if (WIFSTOPPED(status)) {
-			printf("Child process STOPPED by signal %d\n",
-			       WSTOPSIG(status));
+			printf("Child process STOPPED by signal %s\n",
+			       getsig(WSTOPSIG(status)));
+			return 1;
 		} else if (WIFSIGNALED(status)) {
-			printf("Child process TERMINATED by signal %d\n",
-			       WTERMSIG(status));
+			printf("Child process TERMINATED by signal %s\n",
+			       getsig(WTERMSIG(status)));
+			return 1;
 		} else if (WIFCONTINUED(status)) {
 			printf("Child process CONTINUED\n");
+			return 1;
+		} else {
+			printf("Child process has Unknown termination status\n");
+			return 1;
 		}
 	}
-	return 0;
 }
