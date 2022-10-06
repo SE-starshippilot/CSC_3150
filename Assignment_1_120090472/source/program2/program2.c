@@ -43,13 +43,6 @@ struct wait_opts {
   int notask_error;
 };  // cannot export struct, defined here.
 
-struct waitid_info {
-  pid_t pid;
-  uid_t uid;
-  int status;
-  int cause;
-};
-
 extern int do_execve(struct filename *filename,
                      const char __user *const __user *__argv,
                      const char __user *const __user *__envp);
