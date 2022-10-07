@@ -68,7 +68,7 @@ void my_wait(pid_t pid, int __user *status) {
   wo_pid = find_get_pid(pid);
   wo.wo_type = type;
   wo.wo_pid = wo_pid;
-  wo.wo_flags = WEXITED;
+  wo.wo_flags = WUNTRACED;
   wo.wo_info = NULL;
   wo.wo_stat = *status;
   wo.wo_rusage = NULL;
@@ -203,10 +203,10 @@ int my_fork(void *argc) {
     printk("[program2]: child process normal exit with status:%d\n",
            __WEXITSTATUS(status));
   } else if (__WIFSTOPPED(status)) {
-    printk("[program2]: child process stopped with signal:%d\n",
-           __WSTOPSIG(status));
+    printk("[program2]: child process STOPPED by signal %s\n",
+           getsig(__WSTOPSIG(status)));
   } else if (__WIFSIGNALED(status)) {
-    printk("[program2]: child process terminated with signal:%s\n",
+    printk("[program2]: child process TERMINATED by signal %s\n",
            getsig(__WTERMSIG(status)));
   }
   return 0;
