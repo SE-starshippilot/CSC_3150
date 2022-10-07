@@ -5,6 +5,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+
 typedef struct sig_name_prompt {
   char *name;
   char *prompt;
@@ -85,11 +86,16 @@ snp getsig(const int sig) {
   }
 }
 
+void sigchld_handler(int sig){
+  printf("Parent received %s signal.\n", getsig(sig).name);
+}
+
 int main(int argc, char *argv[]) {
   /* fork a child process */
   printf("Process start to fork\n");
   pid_t pid = fork();
   int status = 0;
+  signal(SIGCHLD, sigchld_handler);
   if (pid < 0) {
     fprintf(stderr, "Fork Failed");
     return 1;
@@ -116,7 +122,7 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
     /* check child process'  termination status */
-    printf("Parent process received SIGCHILD signal\n");
+    printf("Status of return:%d\n", status);
     if (WIFEXITED(status)) {
       printf("Normal termination with EXIT STATUS = %d\n", WEXITSTATUS(status));
       return 0;
