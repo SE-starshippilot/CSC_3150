@@ -75,84 +75,79 @@ void my_wait(pid_t pid, int __user *status) {
 
   ret_pid = do_wait(&wo);
   *status = wo.wo_stat;
-  printk("Return value of do_wait: %d\n", (int) ret_pid);
+  printk("Return value of do_wait: %d\n", (int)ret_pid);
   put_pid(wo_pid);
   return;
 }
 
-
-snp getsig(const int __user sig) {
+char* getsig(const int __user sig) {
   switch (sig) {
     case 0:
-      return (snp){.name = "SIGNULL", .prompt = "NULL"};
+      return "SIGNULL";
     case SIGHUP:
-      return (snp){.name = "SIGHUP", .prompt = "hung up"};
+      return "SIGHUP";
     case SIGINT:
-      return (snp){.name = "SIGINT", .prompt = "is interrupted"};
+      return "SIGINT";
     case SIGQUIT:
-      return (snp){.name = "SIGQUIT", .prompt = "is quitted"};
+      return "SIGQUIT";
     case SIGILL:
-      return (snp){.name = "SIGILL", .prompt = "contains illegal instruction"};
+      return "SIGILL";
     case SIGTRAP:
-      return (snp){.name = "SIGTRAP", .prompt = "is trapped"};
+      return "SIGTRAP";
     case SIGABRT:
-      return (snp){.name = "SIGABRT", .prompt = "is aborted"};
+      return "SIGABRT";
     case SIGBUS:
-      return (snp){.name = "SIGBUS", .prompt = "contains bus error"};
+      return "SIGBUS";
     case SIGFPE:
-      return (snp){.name = "SIGFPE", .prompt = "contains floating point error"};
+      return "SIGFPE";
     case SIGKILL:
-      return (snp){.name = "SIGKILL", .prompt = "is killed"};
+      return "SIGKILL";
     case SIGUSR1:
-      return (snp){.name = "SIGUSR1",
-                   .prompt = "contains user defined signal 1"};
+      return "SIGUSR1";
     case SIGSEGV:
-      return (snp){.name = "SIGSEGV", .prompt = "contains segmentation fault"};
+      return "SIGSEGV";
     case SIGUSR2:
-      return (snp){.name = "SIGUSR2",
-                   .prompt = "contains user defined signal 2"};
+      return "SIGUSR2";
     case SIGPIPE:
-      return (snp){.name = "SIGPIPE", .prompt = "has broken pipe"};
+      return "SIGPIPE";
     case SIGALRM:
-      return (snp){.name = "SIGALRM", .prompt = "received alarm clock signal"};
+      return "SIGALRM";
     case SIGTERM:
-      return (snp){.name = "SIGTERM", .prompt = "is terminated"};
+      return "SIGTERM";
     case SIGSTKFLT:
-      return (snp){.name = "SIGSTKFLT", .prompt = "has stack fault"};
+      return "SIGSTKFLT";
     case SIGCHLD:
-      return (snp){.name = "SIGCHLD", .prompt = "has child process terminated"};
+      return "SIGCHLD";
     case SIGCONT:
-      return (snp){.name = "SIGCONT", .prompt = "is continued"};
+      return "SIGCONT";
     case SIGSTOP:
-      return (snp){.name = "SIGSTOP", .prompt = "is stopped"};
+      return "SIGSTOP";
     case SIGTSTP:
-      return (snp){.name = "SIGTSTP", .prompt = "is stopped from tty"};
+      return "SIGTSTP";
     case SIGTTIN:
-      return (snp){.name = "SIGTTIN", .prompt = "is stopped from tty input"};
+      return "SIGTTIN";
     case SIGTTOU:
-      return (snp){.name = "SIGTTOU", .prompt = "is stopped from tty output"};
+      return "SIGTTOU";
     case SIGURG:
-      return (snp){.name = "SIGURG",
-                   .prompt = "has urgent condition on socket"};
+      return "SIGURG";
     case SIGXCPU:
-      return (snp){.name = "SIGXCPU", .prompt = "has exceeded CPU time limit"};
+      return "SIGXCPU";
     case SIGXFSZ:
-      return (snp){.name = "SIGXFSZ", .prompt = "has exceeded file size limit"};
+      return "SIGXFSZ";
     case SIGVTALRM:
-      return (snp){.name = "SIGVTALRM",
-                   .prompt = "received virtual alarm clock signal"};
+      return "SIGVTALRM";
     case SIGPROF:
-      return (snp){.name = "SIGPROF", .prompt = "received profiling signal"};
+      return "SIGPROF";
     case SIGWINCH:
-      return (snp){.name = "SIGWINCH", .prompt = "has window size changed"};
+      return "SIGWINCH";
     case SIGIO:
-      return (snp){.name = "SIGIO", .prompt = "has I/O is possible"};
+      return "SIGIO";
     case SIGPWR:
-      return (snp){.name = "SIGPWR", .prompt = "has power failure"};
+      return "SIGPWR";
     case SIGSYS:
-      return (snp){.name = "SIGSYS", .prompt = "contains bad system call"};
+      return "SIGSYS";
     default:
-      return (snp){.name = "UNKOWN", .prompt = "is unknown"};
+      return "UNKOWN";
   }
 }
 
@@ -162,8 +157,10 @@ int my_exec(void) {
   struct filename *files_stat_struct;
   int ret_exec;
   files_stat_struct = getname_kernel(path_to_file);
-  ret_exec = do_execve(files_stat_struct, NULL, NULL);// refrence: https://piazza.com/class/l7r9eyyrpo86ds/post/79_f3;
-  return ret_exec;  
+  ret_exec = do_execve(
+      files_stat_struct, NULL,
+      NULL);  // refrence: https://piazza.com/class/l7r9eyyrpo86ds/post/79_f3;
+  return ret_exec;
 }
 
 // implement fork function
@@ -202,16 +199,15 @@ int my_fork(void *argc) {
   }
   /* wait until child process terminates */
   my_wait(pid, &status);
-  if (__WIFEXITED(status)){
-    printk("[program2]: child process normal exit with status:%d\n", __WEXITSTATUS(status));
-  } else if (__WIFSTOPPED(status)){
-    printk("[program2]: child process stopped with signal:%d\n", __WSTOPSIG(status));
-  } else if (__WIFSIGNALED(status)){
-    snp signal_name;
-    signal_name.name = "SIGBUS";
-    signal_name.prompt = "contains bus error";
-    printk("signal#7 is: %s\n", signal_name.name);
-    printk("[program2]: child process terminated with signal:%d\n", __WTERMSIG(status));
+  if (__WIFEXITED(status)) {
+    printk("[program2]: child process normal exit with status:%d\n",
+           __WEXITSTATUS(status));
+  } else if (__WIFSTOPPED(status)) {
+    printk("[program2]: child process stopped with signal:%d\n",
+           __WSTOPSIG(status));
+  } else if (__WIFSIGNALED(status)) {
+    printk("[program2]: child process terminated with signal:%s\n",
+           getsig(__WTERMSIG(status)));
   }
   return 0;
 }
