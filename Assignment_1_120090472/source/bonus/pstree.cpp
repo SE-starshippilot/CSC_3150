@@ -1,15 +1,4 @@
-#include <dirent.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <regex.h>
-#include <sys/types.h>
-#include <string>
-#include <iostream>
-
 #include "pstree.h"
-
-
-
 
 void compileRegex(regex_t *regex){
     int reg_comp_status;
@@ -59,15 +48,27 @@ void compileRegex(regex_t *regex){
 // }
 
 void createProcNode(std::map<int, proc_node*>* p_map, int pid){
-    proc_node *temp = new proc_node{(pid_t) pid, 0, nullptr, nullptr};
+    proc_node *temp = new proc_node{(pid_t) pid, 0, "test", nullptr, nullptr, nullptr};
     p_map->insert(std::pair<int, proc_node*>(pid, temp));
 }
 
-// void insertProcNode(std::map<int, proc_node>* p_map, int ppid, int pid){
-//     proc_node parent = (*p_map)[ppid];
-//     proc_node children = (*p_map)[pid];
+void insertProcNode(std::map<int, proc_node*>* p_map, int ppid, int pid){
+    proc_node *parent = (*p_map)[ppid];
+    proc_node *child = (*p_map)[pid];
 
-// }
+    child->parent = parent;
+    child->ppid = parent->pid;
+
+    if (parent->first_child){
+        proc_node *_sibling = parent->first_child;
+        do{
+            _sibling = _sibling->next_sibling;
+        }while (_sibling->next_sibling);
+        _sibling->next_sibling = child;
+    } else {
+        parent->first_child = child;
+    }
+}
 
 int main(int argc, char *argv[])
 {
