@@ -1,6 +1,7 @@
 *
 !*/
 !*.*
+!Makefile
 *.DS_Store
 *.json
 *.zip
