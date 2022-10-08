@@ -5,89 +5,78 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-
-typedef struct sig_name_prompt {
-  char *name;
-  char *prompt;
-} snp;
-
-snp getsig(const int sig) {
-  switch (sig) {
-    case 0:
-      return (snp){.name = "SIGNULL", .prompt = "NULL"};
+char* getsig(const int sig){
+    switch (sig)
+    {
     case SIGHUP:
-      return (snp){.name = "SIGHUP", .prompt = "hung up"};
+      return "SIGHUP";
     case SIGINT:
-      return (snp){.name = "SIGINT", .prompt = "is interrupted"};
+      return "SIGINT";
     case SIGQUIT:
-      return (snp){.name = "SIGQUIT", .prompt = "is quitted"};
+      return "SIGQUIT";
     case SIGILL:
-      return (snp){.name = "SIGILL", .prompt = "contains illegal instruction"};
+      return "SIGILL";
     case SIGTRAP:
-      return (snp){.name = "SIGTRAP", .prompt = "is trapped"};
-    case SIGABRT:
-      return (snp){.name = "SIGABRT", .prompt = "is aborted"};
+      return "SIGTRAP";
+    case SIGABRT: // or SIGIOT, same in 5.10.15 
+      return "SIGABRT";
     case SIGBUS:
-      return (snp){.name = "SIGBUS", .prompt = "contains bus error"};
+      return "SIGBUS";
     case SIGFPE:
-      return (snp){.name = "SIGFPE", .prompt = "contains floating point error"};
+      return "SIGFPE";
     case SIGKILL:
-      return (snp){.name = "SIGKILL", .prompt = "is killed"};
+      return "SIGKILL";
     case SIGUSR1:
-      return (snp){.name = "SIGUSR1",
-                   .prompt = "contains user defined signal 1"};
+      return "SIGUSR1";
     case SIGSEGV:
-      return (snp){.name = "SIGSEGV", .prompt = "contains segmentation fault"};
+      return "SIGSEGV";
     case SIGUSR2:
-      return (snp){.name = "SIGUSR2",
-                   .prompt = "contains user defined signal 2"};
+      return "SIGUSR2";
     case SIGPIPE:
-      return (snp){.name = "SIGPIPE", .prompt = "has broken pipe"};
+      return "SIGPIPE";
     case SIGALRM:
-      return (snp){.name = "SIGALRM", .prompt = "received alarm clock signal"};
+      return "SIGALRM";
     case SIGTERM:
-      return (snp){.name = "SIGTERM", .prompt = "is terminated"};
+      return "SIGTERM";
     case SIGSTKFLT:
-      return (snp){.name = "SIGSTKFLT", .prompt = "has stack fault"};
+      return "SIGSTKFLT";
     case SIGCHLD:
-      return (snp){.name = "SIGCHLD", .prompt = "has child process terminated"};
+      return "SIGCHLD";
     case SIGCONT:
-      return (snp){.name = "SIGCONT", .prompt = "is continued"};
+      return "SIGCONT";
     case SIGSTOP:
-      return (snp){.name = "SIGSTOP", .prompt = "is stopped"};
+      return "SIGSTOP";
     case SIGTSTP:
-      return (snp){.name = "SIGTSTP", .prompt = "is stopped from tty"};
+      return "SIGTSTP";
     case SIGTTIN:
-      return (snp){.name = "SIGTTIN", .prompt = "is stopped from tty input"};
+      return "SIGTTIN";
     case SIGTTOU:
-      return (snp){.name = "SIGTTOU", .prompt = "is stopped from tty output"};
+      return "SIGTTOU";
     case SIGURG:
-      return (snp){.name = "SIGURG",
-                   .prompt = "has urgent condition on socket"};
+      return "SIGURG";
     case SIGXCPU:
-      return (snp){.name = "SIGXCPU", .prompt = "has exceeded CPU time limit"};
+      return "SIGXCPU";
     case SIGXFSZ:
-      return (snp){.name = "SIGXFSZ", .prompt = "has exceeded file size limit"};
+      return "SIGXFSZ";
     case SIGVTALRM:
-      return (snp){.name = "SIGVTALRM",
-                   .prompt = "received virtual alarm clock signal"};
+      return "SIGVTALRM";
     case SIGPROF:
-      return (snp){.name = "SIGPROF", .prompt = "received profiling signal"};
+      return "SIGPROF";
     case SIGWINCH:
-      return (snp){.name = "SIGWINCH", .prompt = "has window size changed"};
+      return "SIGWINCH";
     case SIGIO:
-      return (snp){.name = "SIGIO", .prompt = "has I/O is possible"};
+      return "SIGIO";
     case SIGPWR:
-      return (snp){.name = "SIGPWR", .prompt = "has power failure"};
-    case SIGSYS:
-      return (snp){.name = "SIGSYS", .prompt = "contains bad system call"};
+      return "SIGPWR";
+    case SIGSYS:// or SIGUNUSED, same in 5.10.15
+      return "SIGSYS";
     default:
-      return (snp){.name = "UNKOWN", .prompt = "is unknown"};
-  }
+        return "UNKNOWN SIGNAL";
+    }
 }
 
 void sigchld_handler(int sig){
-  printf("Parent received %s signal.\n", getsig(sig).name);
+  printf("Parent received %s signal\n", getsig(sig));
 }
 
 int main(int argc, char *argv[]) {
@@ -122,23 +111,13 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
     /* check child process'  termination status */
-    printf("Status of return:%d\n", status);
     if (WIFEXITED(status)) {
       printf("Normal termination with EXIT STATUS = %d\n", WEXITSTATUS(status));
       return 0;
     } else if (WIFSTOPPED(status)) {
-      snp sig = getsig(WSTOPSIG(status));
-      printf(
-          "Child process STOPPED by signal %s.\n\tReason: child process %s.\n",
-          sig.name, sig.prompt);
-      return 1;
+      printf("Child process get %s signal\n", getsig(WSTOPSIG(status)));
     } else if (WIFSIGNALED(status)) {
-      snp sig = getsig(WTERMSIG(status));
-      printf(
-          "Child process TERMINATED by signal %s.\n\tReason: child process "
-          "%s.\n",
-          sig.name, sig.prompt);
-      return 1;
+      printf("Child process get %s signal\n", getsig(WTERMSIG(status)));
     } else if (WIFCONTINUED(status)) {
       printf("Child process CONTINUED\n");
       return 1;
