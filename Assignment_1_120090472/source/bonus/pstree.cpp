@@ -1,6 +1,3 @@
-#define PROCDIR "/proc"
-#define MAX_CHILD_PROC 256
-
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,13 +7,9 @@
 #include <string>
 #include <iostream>
 
-typedef struct node{
-	pid_t pid;
-	pid_t ppid;
+#include "pstree.h"
 
-	struct node *parent;
-	struct node *childrens[MAX_CHILD_PROC];
-} proc_node;
+
 
 
 void compileRegex(regex_t *regex){
@@ -100,10 +93,11 @@ int main(int argc, char *argv[])
 		if (sd->d_type == DT_DIR && regexec(&regex, sd->d_name, 0, NULL, 0) == 0) {
 			proc_num++;
             int pid = atoi(sd->d_name);
-            if (proc_map.find(pid) != proc_map.end()){
+            createProcNode(&proc_map, pid);
+            // if (proc_map.find(pid) != proc_map.end()){
                 
-            }
-			printf("%s\n", sd->d_name);
+            // }
+			// printf("%s\n", sd->d_name);
 		}
 	}
 	printf("Total number of process:%d\n", proc_num);
