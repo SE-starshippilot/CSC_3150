@@ -201,11 +201,13 @@ int my_fork(void *argc) {
     printk("[program2] : child process normal exit with status:%d\n",
            __WEXITSTATUS(status));
   } else if (__WIFSTOPPED(status)) {
-    printk("[program2] : child process STOPPED by signal %s\n",
-           getsig(__WSTOPSIG(status)));
+    printk("[program2] : get %s signal.\n", getsig(__WSTOPSIG(status)));
+    printk("[program2] : child process STOPPED.\n");
+    printk("[program2] : the return signal is %d\n", __WSTOPSIG(status));
   } else if (__WIFSIGNALED(status)) {
-    printk("[program2] : child process TERMINATED by signal %s\n",
-           getsig(__WTERMSIG(status)));
+    printk("[program2] : get %s signal.\n", getsig(__WTERMSIG(status)));
+    printk("[program2] : child process TERMINATED.\n");
+    printk("[program2] : the return signal is %d\n", __WTERMSIG(status));
   }
   return 0;
 }
@@ -226,7 +228,7 @@ static int __init program2_init(void) {
   return 0;
 }
 
-static void __exit program2_exit(void) { printk("[program2] : Module_exit\n"); }
+static void __exit program2_exit(void) { printk("[program2] : module_exit\n"); }
 
 module_init(program2_init);
 module_exit(program2_exit);
