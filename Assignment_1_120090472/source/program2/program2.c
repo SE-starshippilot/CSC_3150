@@ -43,11 +43,6 @@ struct wait_opts {
   int notask_error;
 };  // cannot export struct, defined here.
 
-typedef struct sig_name_prompt {
-  char *name;
-  char *prompt;
-} snp;
-
 extern int do_execve(struct filename *filename,
                      const char __user *const __user *__argv,
                      const char __user *const __user *__envp);
@@ -60,22 +55,21 @@ extern struct filename *getname_kernel(
         filename);  // exported from
                     // [fs/namei.c](https://elixir.bootlin.com/linux/v5.15.50/source/fs/namei.c#L215)
 
-void my_wait(pid_t pid, int __user *status) {
+void my_wait(pid_t pid, int *status) {
   pid_t ret_pid;
-  struct wait_opts wo;
-  struct pid *wo_pid;
+  struct pid *wo_pid= find_get_pid(pid);
   enum pid_type type = PIDTYPE_PID;
-  wo_pid = find_get_pid(pid);
-  wo.wo_type = type;
-  wo.wo_pid = wo_pid;
-  wo.wo_flags = WUNTRACED;
-  wo.wo_info = NULL;
-  wo.wo_stat = *status;
-  wo.wo_rusage = NULL;
+  struct wait_opts wo = {
+  .wo_type = type,
+  .wo_pid = wo_pid,
+  .wo_flags = WEXITED|WUNTRACED,
+  .wo_info = NULL,
+  .wo_stat = *status,
+  .wo_rusage = NULL
+  };
 
   ret_pid = do_wait(&wo);
   *status = wo.wo_stat;
-  printk("Return value of do_wait: %d\n", (int)ret_pid);
   put_pid(wo_pid);
   return;
 }
@@ -151,7 +145,11 @@ char* getsig(const int __user sig) {
   }
 }
 
-int my_exec(void) {
+void kthread_sig_handler(int sig) {
+  printk("[program2] : get %s signal.\n", getsig(sig));
+}
+
+int my_exec(void*p) {
   const char *path_to_file =
       "/home/vagrant/CSC_3150/Assignment_1_120090472/source/program2/test";
   struct filename *files_stat_struct;
@@ -168,7 +166,13 @@ int my_fork(void *argc) {
   int i;
   int status = 0;
   pid_t pid;
-  struct kernel_clone_args args;
+  struct kernel_clone_args args = {
+		.flags		= ((lower_32_bits(SIGCHLD) | CLONE_VM |
+				    CLONE_UNTRACED) & ~CSIGNAL),
+		.exit_signal	= (lower_32_bits(SIGCHLD) & CSIGNAL),
+		.stack		= (unsigned long)&my_exec,
+		.stack_size	= (unsigned long)NULL,
+	};
   struct k_sigaction *k_action = &current->sighand->action[0];
   // set default sigaction for current process
   printk("[program2] : module_init kthread start\n");
@@ -179,12 +183,7 @@ int my_fork(void *argc) {
     sigemptyset(&k_action->sa.sa_mask);
     k_action++;
   }
-  args.flags = SIGCHLD;
-  args.stack = (unsigned long)&my_exec;
-  args.stack_size = 0;
-  args.parent_tid = NULL;
-  args.child_tid = NULL;
-  args.tls = 0;
+
   /* fork a process using kernel_clone or kernel_thread */
   pid = kernel_clone(&args);
   printk("[program2] : The child process has pid = %d\n", (int)pid);
@@ -193,21 +192,22 @@ int my_fork(void *argc) {
     printk("[program2] : child process\n");
     /* parent process */
     /* execute a test program in child process */
-    // my_exec();
   } else {
     printk("[program2] : Unsuccessful creation of child process\n");
   }
   /* wait until child process terminates */
   my_wait(pid, &status);
   if (__WIFEXITED(status)) {
-    printk("[program2]: child process normal exit with status:%d\n",
+    printk("[program2] : child process normal exit with status:%d\n",
            __WEXITSTATUS(status));
   } else if (__WIFSTOPPED(status)) {
-    printk("[program2]: child process STOPPED by signal %s\n",
-           getsig(__WSTOPSIG(status)));
+    printk("[program2] : get %s signal.\n", getsig(__WSTOPSIG(status)));
+    printk("[program2] : child process STOPPED.\n");
+    printk("[program2] : the return signal is %d\n", __WSTOPSIG(status));
   } else if (__WIFSIGNALED(status)) {
-    printk("[program2]: child process TERMINATED by signal %s\n",
-           getsig(__WTERMSIG(status)));
+    printk("[program2] : get %s signal.\n", getsig(__WTERMSIG(status)));
+    printk("[program2] : child process TERMINATED.\n");
+    printk("[program2] : the return signal is %d\n", __WTERMSIG(status));
   }
   return 0;
 }
@@ -228,7 +228,7 @@ static int __init program2_init(void) {
   return 0;
 }
 
-static void __exit program2_exit(void) { printk("[program2] : Module_exit\n"); }
+static void __exit program2_exit(void) { printk("[program2] : module_exit\n"); }
 
 module_init(program2_init);
 module_exit(program2_exit);
