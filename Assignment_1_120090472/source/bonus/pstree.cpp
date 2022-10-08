@@ -7,6 +7,8 @@
 #include <regex.h>
 #include <sys/types.h>
 #include <map>
+#include <string>
+#include <iostream>
 
 typedef struct node{
 	pid_t pid;
@@ -15,6 +17,7 @@ typedef struct node{
 	struct node *parent;
 	struct node *childrens[MAX_CHILD_PROC];
 } proc_node;
+
 
 void compileRegex(regex_t *regex){
     int reg_comp_status;
@@ -63,15 +66,16 @@ void compileRegex(regex_t *regex){
 // 	return ll_create_and_insert(&procname[0], atoi(pid), atoi(ppid));
 // }
 
-void createProcNode(std::map<int, proc_node>* p_map, int pid){
-    proc_node temp = {
-        .pid = (pid_t) pid,
-        .ppid = NULL,
-        .parent = NULL,
-        .childrens = NULL
-    };
-    p_map->insert(std::pair<int, proc_node>(pid, temp));
+void createProcNode(std::map<int, proc_node*>* p_map, int pid){
+    proc_node *temp = new proc_node{(pid_t) pid, 0, nullptr, nullptr};
+    p_map->insert(std::pair<int, proc_node*>(pid, temp));
 }
+
+// void insertProcNode(std::map<int, proc_node>* p_map, int ppid, int pid){
+//     proc_node parent = (*p_map)[ppid];
+//     proc_node children = (*p_map)[pid];
+
+// }
 
 int main(int argc, char *argv[])
 {
@@ -81,7 +85,7 @@ int main(int argc, char *argv[])
     int reg_comp_status;
     int val;
 	int proc_num = 0;
-    std::map<int, proc_node> proc_map;
+    std::map<int, proc_node*> proc_map;
     reg_comp_status = regcomp(&regex, "^[0-9]", 0);
     if (reg_comp_status) {
         fprintf(stderr, "Could not compile regex!\n");
@@ -95,6 +99,10 @@ int main(int argc, char *argv[])
 	while ((sd = readdir(dir)) != NULL) {
 		if (sd->d_type == DT_DIR && regexec(&regex, sd->d_name, 0, NULL, 0) == 0) {
 			proc_num++;
+            int pid = atoi(sd->d_name);
+            if (proc_map.find(pid) != proc_map.end()){
+                
+            }
 			printf("%s\n", sd->d_name);
 		}
 	}
