@@ -1,18 +1,28 @@
 #define PROCDIR "/proc"
 #define MAX_NAME_LENGTH 128
 #define PROC_FOLDER_PATTERN "^[0-9]+$"
+#define OPSTRING "hV"
 
 #include <dirent.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <regex>
 #include <sys/types.h>
 #include <string>
 #include <iostream>
+#include <fstream>
 
 #include <map>
 
 std::regex reg(PROC_FOLDER_PATTERN);
+const char* verbose = 
+"pstree (PSmisc) version 0.0.1\n"
+"Copyright (C) 2022 Tianhao SHI\n"
+"\n"
+"pstree comes with ABSOLUTELY NO WARRANTY.\n"
+"This is free software, and you are welcome to redistribute it under\n"
+"the terms of the GNU General Public License.\n";
 
 struct proc_node{
 	pid_t pid;

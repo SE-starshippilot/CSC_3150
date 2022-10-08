@@ -35,6 +35,23 @@
 // 	return ll_create_and_insert(&procname[0], atoi(pid), atoi(ppid));
 // }
 
+int getProcInfo(std::string proc){
+	std::string proc_status_path = PROCDIR + std::string("/") + proc + std::string("/status");
+	std::cout << proc_status_path << std::endl;
+    // std::ifstream  proc_status_file;
+    // proc_status_file.open(proc_status_path);
+    // if (!proc_status_file.is_open()){
+    //     std::cout << "Error opening file";
+    //     return 1;
+    // } else {
+    //     std::string line;
+    //     while (std::getline(proc_status_file, line)){
+    //         std::cout << line << std::endl;
+    //     }
+    // }
+    return 0;
+}
+
 void createProcNode(std::map<int, proc_node *> *p_map, int pid)
 {
 	proc_node *temp = new proc_node{ (pid_t)pid, 0,	      "test",
@@ -68,6 +85,22 @@ int main(int argc, char *argv[])
 	int reg_comp_status;
 	int val;
 	int proc_num = 0;
+
+	/*parse options*/
+	while ((val = getopt(argc, argv, OPSTRING)) != -1) {
+		switch (val) {
+		case 'h':
+			std::cout << "Usage: pstree [-h] [pid | name | -]\n" << std::endl;
+			return 0;
+		case 'V':
+			std::cout << verbose << std::endl;
+			return 0;
+		default:
+			std:: cout <<"Usage: pstree [-h] [pid | name | -]\n" << std::endl;
+			return 1;
+		}
+	}
+
 	std::map<int, proc_node *> proc_map;
 	dir = opendir(PROCDIR);
 	if (dir == NULL) {
@@ -79,11 +112,14 @@ int main(int argc, char *argv[])
 		    std::regex_match(sd->d_name,
 				     std::regex(PROC_FOLDER_PATTERN))) {
 			proc_num++;
+			int info = getProcInfo(sd->d_name);
 			int pid = atoi(sd->d_name);
-			// createProcNode(&proc_map, pid);
-			// if (proc_map.find(pid) != proc_map.end()){
-
-			// }
+			createProcNode(&proc_map, pid);
+			if (proc_map.find(pid) != proc_map.end()){
+			} else {
+				int ppid = proc_map[pid]->ppid;
+				insertProcNode(&proc_map, pid, pid);
+			}
 			printf("%s\n", sd->d_name);
 		}
 	}
