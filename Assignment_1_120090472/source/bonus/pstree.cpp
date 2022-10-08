@@ -1,17 +1,5 @@
 #include "pstree.h"
 
-void compileRegex(regex_t *regex){
-    int reg_comp_status;
-    char msgbuf[100];
-
-    reg_comp_status = regcomp(regex, "^[0-9]+$", 0);
-    if (reg_comp_status) {
-        fprintf(stderr, "Could not compile regex!\n");
-        exit(1);
-    }
-    return;
-}
-
 // int catalog_process(char *dirname)
 // {
 // 	char filename[256];
@@ -47,56 +35,55 @@ void compileRegex(regex_t *regex){
 // 	return ll_create_and_insert(&procname[0], atoi(pid), atoi(ppid));
 // }
 
-void createProcNode(std::map<int, proc_node*>* p_map, int pid){
-    proc_node *temp = new proc_node{(pid_t) pid, 0, "test", nullptr, nullptr, nullptr};
-    p_map->insert(std::pair<int, proc_node*>(pid, temp));
+void createProcNode(std::map<int, proc_node *> *p_map, int pid)
+{
+	proc_node *temp = new proc_node{ (pid_t)pid, 0,	      "test",
+					 nullptr,    nullptr, nullptr };
+	p_map->insert(std::pair<int, proc_node *>(pid, temp));
 }
 
-void insertProcNode(std::map<int, proc_node*>* p_map, int ppid, int pid){
-    proc_node *parent = (*p_map)[ppid];
-    proc_node *child = (*p_map)[pid];
+void insertProcNode(std::map<int, proc_node *> *p_map, int ppid, int pid)
+{
+	proc_node *parent = (*p_map)[ppid];
+	proc_node *child = (*p_map)[pid];
 
-    child->parent = parent;
-    child->ppid = parent->pid;
+	child->parent = parent;
+	child->ppid = parent->pid;
 
-    if (parent->first_child){
-        proc_node *_sibling = parent->first_child;
-        do{
-            _sibling = _sibling->next_sibling;
-        }while (_sibling->next_sibling);
-        _sibling->next_sibling = child;
-    } else {
-        parent->first_child = child;
-    }
+	if (parent->first_child) {
+		proc_node *_sibling = parent->first_child;
+		do {
+			_sibling = _sibling->next_sibling;
+		} while (_sibling->next_sibling);
+		_sibling->next_sibling = child;
+	} else {
+		parent->first_child = child;
+	}
 }
 
 int main(int argc, char *argv[])
 {
 	DIR *dir;
 	struct dirent *sd;
-    regex_t regex;
-    int reg_comp_status;
-    int val;
+	int reg_comp_status;
+	int val;
 	int proc_num = 0;
-    std::map<int, proc_node*> proc_map;
-    reg_comp_status = regcomp(&regex, "^[0-9]", 0);
-    if (reg_comp_status) {
-        fprintf(stderr, "Could not compile regex!\n");
-        exit(1);
-    }
+	std::map<int, proc_node *> proc_map;
 	dir = opendir(PROCDIR);
 	if (dir == NULL) {
 		perror("opendir");
 		return 1;
 	}
 	while ((sd = readdir(dir)) != NULL) {
-		if (sd->d_type == DT_DIR && regexec(&regex, sd->d_name, 0, NULL, 0) == 0) {
+		if (sd->d_type == DT_DIR &&
+		    std::regex_match(sd->d_name,
+				     std::regex(PROC_FOLDER_PATTERN))) {
 			proc_num++;
-            int pid = atoi(sd->d_name);
-            createProcNode(&proc_map, pid);
-            // if (proc_map.find(pid) != proc_map.end()){
-                
-            // }
+			int pid = atoi(sd->d_name);
+			// createProcNode(&proc_map, pid);
+			// if (proc_map.find(pid) != proc_map.end()){
+
+			// }
 			// printf("%s\n", sd->d_name);
 		}
 	}
