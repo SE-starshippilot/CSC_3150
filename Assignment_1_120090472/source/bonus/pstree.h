@@ -12,6 +12,8 @@
 
 #include <map>
 
+std::regex reg(PROC_FOLDER_PATTERN);
+
 struct proc_node{
 	pid_t pid;
 	pid_t ppid;

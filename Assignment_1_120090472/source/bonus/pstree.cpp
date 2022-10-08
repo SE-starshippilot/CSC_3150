@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
 			// if (proc_map.find(pid) != proc_map.end()){
 
 			// }
-			// printf("%s\n", sd->d_name);
+			printf("%s\n", sd->d_name);
 		}
 	}
 	printf("Total number of process:%d\n", proc_num);
