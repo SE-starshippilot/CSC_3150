@@ -60,7 +60,9 @@ extern struct filename *getname_kernel(
         filename);  // exported from
                     // [fs/namei.c](https://elixir.bootlin.com/linux/v5.15.50/source/fs/namei.c#L215)
 
-void my_wait(pid_t pid, int __user *status) {
+
+
+void my_wait(pid_t pid, int *status) {
   pid_t ret_pid;
   struct wait_opts wo;
   struct pid *wo_pid;
@@ -68,7 +70,7 @@ void my_wait(pid_t pid, int __user *status) {
   wo_pid = find_get_pid(pid);
   wo.wo_type = type;
   wo.wo_pid = wo_pid;
-  wo.wo_flags = WUNTRACED;
+  wo.wo_flags = WEXITED|WUNTRACED;
   wo.wo_info = NULL;
   wo.wo_stat = *status;
   wo.wo_rusage = NULL;
@@ -151,6 +153,10 @@ char* getsig(const int __user sig) {
   }
 }
 
+void kthread_sig_handler(int sig) {
+  printk("[program2] : get %s signal.\n", getsig(sig));
+}
+
 int my_exec(void) {
   const char *path_to_file =
       "/home/vagrant/CSC_3150/Assignment_1_120090472/source/program2/test";
@@ -181,10 +187,11 @@ int my_fork(void *argc) {
   }
   args.flags = SIGCHLD;
   args.stack = (unsigned long)&my_exec;
-  args.stack_size = 0;
+  args.stack_size = (unsigned long) 0;
+  args.tls = (unsigned long) 0;
   args.parent_tid = NULL;
   args.child_tid = NULL;
-  args.tls = 0;
+  // args.exit_signal = SIGCHLD;
   /* fork a process using kernel_clone or kernel_thread */
   pid = kernel_clone(&args);
   printk("[program2] : The child process has pid = %d\n", (int)pid);
