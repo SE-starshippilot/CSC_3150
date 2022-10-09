@@ -188,7 +188,7 @@ int my_fork(void *argc) {
   pid = kernel_clone(&args);
   printk("[program2] : The child process has pid = %d\n", (int)pid);
   printk("[program2] : This is the parent process, pid = %d\n", current->pid);
-  if (pid) {
+  if (pid)   {
     printk("[program2] : child process\n");
     /* parent process */
     /* execute a test program in child process */
@@ -202,11 +202,11 @@ int my_fork(void *argc) {
            __WEXITSTATUS(status));
   } else if (__WIFSTOPPED(status)) {
     printk("[program2] : get %s signal.\n", getsig(__WSTOPSIG(status)));
-    printk("[program2] : child process STOPPED.\n");
+    printk("[program2] : child process stopped\n");
     printk("[program2] : the return signal is %d\n", __WSTOPSIG(status));
   } else if (__WIFSIGNALED(status)) {
     printk("[program2] : get %s signal.\n", getsig(__WTERMSIG(status)));
-    printk("[program2] : child process TERMINATED.\n");
+    printk("[program2] : child process terminated\n");
     printk("[program2] : the return signal is %d\n", __WTERMSIG(status));
   }
   return 0;
