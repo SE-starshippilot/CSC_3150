@@ -5,12 +5,23 @@ proc_info getProcInfo(std::string proc){
 		return proc_info{0, 0, "swapper"};
 	}
 	std::string proc_status_path = PROCDIR + std::string("/") + proc + std::string("/status");
-    std::ifstream  proc_status_file;
+	std::string proc_cmdline_path = PROCDIR + std::string("/") + proc + std::string("/cmdline");
+    std::ifstream  proc_status_file, proc_cmdline_file;
 	proc_info _info;
 	std::string delim = ":";
     proc_status_file.open(proc_status_path);
+	proc_cmdline_file.open(proc_cmdline_path);
+	if (!proc_status_file.is_open()){
+		std::cerr << "Error: cannot open " << proc_status_path << std::endl;
+		exit(EXIT_FAILURE);
+	} else {
+		std::string line;
+		std::getline(proc_cmdline_file, line);
+		_info.cmdline = line;
+	}
+	proc_cmdline_file.close();
     if (!proc_status_file.is_open()){
-        std::cout << "Error opening file"<<std::endl;
+        std::cerr << "Error opening file"<<std::endl;
         exit(EXIT_FAILURE);
     } else {
         std::string line;
@@ -75,30 +86,41 @@ void insertProcNode(std::map<int, proc_node *> *p_map, int ppid, int pid)
 	}
 }
 
-void traverseTree(proc_node *node, int level, std::string prefix)
+void printTree(proc_node *node, int level, std::string prefix)
 {
 	if (node) {
 		std::string name;
+		name = node->info.name;
 		if (show_pid){
 			name = node->info.name + std::string("(") + std::to_string(node->info.pid) + std::string(")");
-		} else {
-			name = node->info.name;
-		}
+		} 
 		std::string blank(name.length()+1, ' ');
 		std::string n_prefix;
+		if (level == 0){
+			prefix = blank;
+		}
 		if (node->first_child) {
 			std::cout << name  << std::string("-");
 			if (node->first_child->next_sibling) {
 				std::cout << std::string("+-");
+				proc_node *tmp = node->first_child->first_child;
+				bool flag = false;
+				while(tmp){
+					if (tmp->next_sibling){
+						flag = true;
+						break;
+					}
+					tmp = tmp->first_child;
+				}
+				if(flag){
+					n_prefix = prefix + std::string("| ");
+				} else {
+					n_prefix = prefix + std::string("  ");
+				}
 			} else {
 				std::cout << std::string("--");
 			}
-			if (node->first_child->next_sibling && node->next_sibling) {
-				n_prefix = prefix + std::string("| ") +  blank;
-			} else {
-				n_prefix = prefix + blank;
-			}
-			traverseTree(node->first_child, level+1, n_prefix);
+			printTree(node->first_child, level+1, n_prefix);
 		} else {
 			std::cout << name <<std::endl;
 		}
@@ -109,7 +131,7 @@ void traverseTree(proc_node *node, int level, std::string prefix)
 			} else {
 				std::cout << std::string("`-");	
 			}
-			traverseTree(node->next_sibling, level, prefix);
+			printTree(node->next_sibling, level, prefix);
 		} 
 	}
 }
@@ -126,13 +148,13 @@ static inline void trim(std::string *s){
 }
 
 void createTestTree(proc_node *HEAD){
-	HEAD = new proc_node{{0, 0, "Alpha"}, nullptr, nullptr, nullptr};
-	HEAD->first_child = new proc_node{{1, 0, "Beta"}, HEAD, nullptr, nullptr};
+	HEAD = new proc_node{{0, 0, "Alpha", "test"}, nullptr, nullptr, nullptr};
+	HEAD->first_child = new proc_node{{1, 0, "Beta", "test"}, HEAD, nullptr, nullptr};
 	HEAD->first_child->first_child = new proc_node{{2, 1, "Gamma"}, HEAD->first_child, nullptr, nullptr};
-	HEAD->first_child->first_child->next_sibling = new proc_node{{3, 1, "Delta"}, HEAD->first_child, nullptr, nullptr};
-	HEAD->first_child->first_child->next_sibling->next_sibling = new proc_node{{4, 1, "Epsilon"}, HEAD->first_child, nullptr, nullptr};
-	HEAD->first_child->next_sibling = new proc_node{{6, 0, "Zeta"}, HEAD, nullptr, nullptr}; 
-	traverseTree(HEAD, 0, "");
+	HEAD->first_child->first_child->next_sibling = new proc_node{{3, 1, "Delta", "test"}, HEAD->first_child, nullptr, nullptr};
+	HEAD->first_child->first_child->next_sibling->next_sibling = new proc_node{{4, 1, "Epsilon", "test"}, HEAD->first_child, nullptr, nullptr};
+	HEAD->first_child->next_sibling = new proc_node{{6, 0, "Zeta", "test"}, HEAD, nullptr, nullptr}; 
+	printTree(HEAD, 0, "");
 }
 
 int main(int argc, char *argv[])
@@ -163,7 +185,7 @@ int main(int argc, char *argv[])
 
 	/*create swapper process*/
 	std::map<int, proc_node *> proc_map;
-	proc_info swapper_info={0, 0, "swapper"};
+	proc_info swapper_info={0, 0, "swapper", "swapper"};
 	proc_node *swapper = new proc_node{swapper_info, nullptr, nullptr, nullptr};
 	proc_map.insert(std::pair<int, proc_node *>(0, swapper));
 	/*open /proc directory*/
@@ -187,7 +209,7 @@ int main(int argc, char *argv[])
 
 	/*draw tree*/
 	proc_node *systemd = proc_map[1];
-	traverseTree(systemd, 0, std::string(""));
+	printTree(systemd, 0, std::string(""));
 	closedir(dir);
 	return 0;
 }

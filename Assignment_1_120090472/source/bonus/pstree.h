@@ -30,6 +30,7 @@ struct proc_info{
 	pid_t pid;
 	pid_t ppid;
 	std::string name;
+	std::string cmdline;
 };
 
 struct proc_node{
