@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <string>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
 
@@ -47,4 +48,6 @@ proc_info recursiveProcInfo(std::map<int, proc_node *> *p_map, proc_info info);
 
 void insertProcNode(std::map<int, proc_node *> *p_map, int ppid, int pid);
 
-void traverseTree(proc_node *node, int level);
+void traverseTree(proc_node *node, int level, std::string prefix);
+
+bool show_pid;

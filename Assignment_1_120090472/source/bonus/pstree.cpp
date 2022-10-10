@@ -75,33 +75,64 @@ void insertProcNode(std::map<int, proc_node *> *p_map, int ppid, int pid)
 	}
 }
 
-void traverseTree(proc_node *node, int level)
+void traverseTree(proc_node *node, int level, std::string prefix)
 {
 	if (node) {
-		for (int i = 0; i < level-1; i++) {
-			std::cout << "\t";
+		std::string name;
+		if (show_pid){
+			name = node->info.name + std::string("(") + std::to_string(node->info.pid) + std::string(")");
+		} else {
+			name = node->info.name;
 		}
-		// if (level != 0) std::cout << "|-";
-		std::cout << node->info.name ;
+		std::string blank(name.length()+1, ' ');
+		std::string n_prefix;
 		if (node->first_child) {
-			std::cout << std::string("-");
+			std::cout << name  << std::string("-");
 			if (node->first_child->next_sibling) {
 				std::cout << std::string("+-");
 			} else {
 				std::cout << std::string("--");
 			}
-			traverseTree(node->first_child, level+1);
+			if (node->first_child->next_sibling && node->next_sibling) {
+				n_prefix = prefix + std::string("| ") +  blank;
+			} else {
+				n_prefix = prefix + blank;
+			}
+			traverseTree(node->first_child, level+1, n_prefix);
+		} else {
+			std::cout << name <<std::endl;
 		}
 		if (node->next_sibling){
-			
-		}
-		traverseTree(node->next_sibling, level);
+			std::cout << prefix;
+			if (node->next_sibling->next_sibling){
+				std::cout << std::string("|-");	
+			} else {
+				std::cout << std::string("`-");	
+			}
+			traverseTree(node->next_sibling, level, prefix);
+		} 
 	}
+}
+
+static inline std::string createBlankString(int num){
+	std::ostringstream oss;
+	oss << std::setw(num);
+	return oss.str();
 }
 
 static inline void trim(std::string *s){
 	std::stringstream ss(*s);
 	ss >> *s;
+}
+
+void createTestTree(proc_node *HEAD){
+	HEAD = new proc_node{{0, 0, "Alpha"}, nullptr, nullptr, nullptr};
+	HEAD->first_child = new proc_node{{1, 0, "Beta"}, HEAD, nullptr, nullptr};
+	HEAD->first_child->first_child = new proc_node{{2, 1, "Gamma"}, HEAD->first_child, nullptr, nullptr};
+	HEAD->first_child->first_child->next_sibling = new proc_node{{3, 1, "Delta"}, HEAD->first_child, nullptr, nullptr};
+	HEAD->first_child->first_child->next_sibling->next_sibling = new proc_node{{4, 1, "Epsilon"}, HEAD->first_child, nullptr, nullptr};
+	HEAD->first_child->next_sibling = new proc_node{{6, 0, "Zeta"}, HEAD, nullptr, nullptr}; 
+	traverseTree(HEAD, 0, "");
 }
 
 int main(int argc, char *argv[])
@@ -111,8 +142,8 @@ int main(int argc, char *argv[])
 	int reg_comp_status;
 	int val;
 	int proc_num = 0;
-	bool show_pid = false;
 	/*parse options*/
+	show_pid = false;
 	while ((val = getopt(argc, argv, OPSTRING)) != -1) {
 		switch (val) {
 		case 'h':
@@ -153,7 +184,10 @@ int main(int argc, char *argv[])
 		}
 	}
 	printf("Total number of process:%d\n", proc_num);
-	traverseTree(swapper, 0);
+
+	/*draw tree*/
+	proc_node *systemd = proc_map[1];
+	traverseTree(systemd, 0, std::string(""));
 	closedir(dir);
 	return 0;
 }
