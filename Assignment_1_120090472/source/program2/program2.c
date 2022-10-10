@@ -152,8 +152,7 @@ void kthread_sig_handler(int sig)
 
 int my_exec(void *p)
 {
-	const char *path_to_file =
-		"/home/vagrant/CSC_3150/Assignment_1_120090472/source/program2/test";
+	const char *     path_to_file = "/tmp/test";
 	struct filename *files_stat_struct;
 	int		 ret_exec;
 	files_stat_struct = getname_kernel(path_to_file);
