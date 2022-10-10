@@ -84,8 +84,8 @@ int main(int argc, char *argv[])
 {
 	/* fork a child process */
 	printf("Process start to fork\n");
-	pid_t pid = fork();
-	int status = 0;
+	pid_t pid    = fork();
+	int   status = 0;
 	signal(SIGCHLD, sigchld_handler);
 	if (pid < 0) {
 		fprintf(stderr, "Fork Failed");
