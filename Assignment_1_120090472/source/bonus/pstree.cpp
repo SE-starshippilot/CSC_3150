@@ -96,9 +96,6 @@ void printTree(proc_node *node, int level, std::string prefix)
 		} 
 		std::string blank(name.length()+1, ' ');
 		std::string n_prefix;
-		if (level == 0){
-			prefix = blank;
-		}
 		if (node->first_child) {
 			std::cout << name  << std::string("-");
 			if (node->first_child->next_sibling) {
@@ -113,14 +110,14 @@ void printTree(proc_node *node, int level, std::string prefix)
 					tmp = tmp->first_child;
 				}
 				if(flag){
-					n_prefix = prefix + std::string("| ");
+					prefix = blank + std::string("| ");
 				} else {
-					n_prefix = prefix + std::string("  ");
+					prefix = blank;
 				}
 			} else {
 				std::cout << std::string("--");
 			}
-			printTree(node->first_child, level+1, n_prefix);
+			printTree(node->first_child, level+1, prefix);
 		} else {
 			std::cout << name <<std::endl;
 		}
@@ -185,6 +182,7 @@ int main(int argc, char *argv[])
 
 	/*create swapper process*/
 	std::map<int, proc_node *> proc_map;
+	std::string curr_pid = argv[argc-1];
 	proc_info swapper_info={0, 0, "swapper", "swapper"};
 	proc_node *swapper = new proc_node{swapper_info, nullptr, nullptr, nullptr};
 	proc_map.insert(std::pair<int, proc_node *>(0, swapper));
@@ -208,8 +206,8 @@ int main(int argc, char *argv[])
 	printf("Total number of process:%d\n", proc_num);
 
 	/*draw tree*/
-	proc_node *systemd = proc_map[1];
-	printTree(systemd, 0, std::string(""));
+	proc_node *curr = proc_map[atoi(curr_pid.c_str())];
+	printTree(curr, 0, std::string(""));
 	closedir(dir);
 	return 0;
 }
