@@ -34,7 +34,7 @@ typedef struct wait_queue_entry wait_queue_entry_t;
 
 struct wait_opts {
   enum pid_type wo_type;
-  int wo_flags;
+    int wo_flags;
   struct pid *wo_pid;
   struct signifo *wo_info;
   int wo_stat;
