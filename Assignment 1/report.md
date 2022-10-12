@@ -272,3 +272,7 @@ run: $(PROGS)
 		fi \
 	done
 ```
+
+### Bonus program output
+
+![image-20221010235613486](/Users/shitianhao/Library/Application Support/typora-user-images/image-20221010235613486.png)
