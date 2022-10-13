@@ -18,7 +18,15 @@ struct Node{
 	Node(){} ; 
 } frog ; 
 
-
+/*
+ +-----------------> COLUMN++
+ |
+ |
+ |
+ |
+ v
+ ROW++ 
+*/
 char map[ROW+10][COLUMN] ; 
 
 // Determine a keyboard is hit or not. If yes, return 1. If not, return 0. 
@@ -71,19 +79,20 @@ int main( int argc, char *argv[] ){
 
 	// Initialize the river map and frog's starting position
 	memset( map , 0, sizeof( map ) ) ;
+	// Initiazlize the river
 	int i , j ; 
 	for( i = 1; i < ROW; ++i ){	
 		for( j = 0; j < COLUMN - 1; ++j )	
 			map[i][j] = ' ' ;  
 	}	
-
-	for( j = 0; j < COLUMN - 1; ++j )	
+	// Initialize the river bank
+	for( j = 0; j < COLUMN - 1; ++j )// Upper bank	
 		map[ROW][j] = map[0][j] = '|' ;
 
-	for( j = 0; j < COLUMN - 1; ++j )	
+	for( j = 0; j < COLUMN - 1; ++j )// Lower bank	
 		map[0][j] = map[0][j] = '|' ;
 
-	frog = Node( ROW, (COLUMN-1) / 2 ) ; 
+	frog = Node( ROW, (COLUMN-1) / 2 ) ;// Frog initially at the lower bank, in the middle.
 	map[frog.x][frog.y] = '0' ; 
 
 	//Print the map into screen
