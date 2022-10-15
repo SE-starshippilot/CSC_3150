@@ -14,6 +14,8 @@
 
 pthread_mutex_t kbmutex;
 pthread_cond_t kbcond;
+pthread_mutex_t eventmutex;
+pthread_cond_t eventcond;
 struct Node{
 	int x , y; 
 	Node( int _x , int _y ) : x( _x ) , y( _y ) {}; 
@@ -27,12 +29,13 @@ struct Node{
  v
  ROW++ 
 */
-char map[ROW+10][COLUMN] ; 
-
-// Determine a keyboard is hit or not. If yes, return 1. If not, return 0. 
+char map[ROW][COLUMN] ; 
+int status=1;
+int gametime=0;
+// Determine a keyboard is hit or not. (If yes, return 1. If not, return 0. )
 int kbhit(void){
 	struct termios oldt, newt;
-	int ch, retval;
+	int ch;
 	int oldf;
 
 	tcgetattr(STDIN_FILENO, &oldt);
@@ -52,13 +55,11 @@ int kbhit(void){
 
 	if(ch != EOF)
 	{
-		retval = ch;
 		ungetc(ch, stdin);
 		return 1;
 	}
 	return 0;
 }
-
 
 void *logs_move( void *t ){
 
@@ -69,64 +70,76 @@ void *logs_move( void *t ){
 
 	
 	/*  Check game's status  */
-
-
-	/*  Print the map on the screen  */
-
-	return t;
+	while (status){
+		sleep(1);
+		pthread_cond_broadcast(&eventcond);
+	}
+	pthread_exit(NULL);
 }
 
 void *frog_move( void *t ){
-
 	/*  Move the frog  */
-	char ch;
-	pthread_mutex_lock(&kbmutex);
-	while (true){
-		pthread_cond_wait(&kbcond, &kbmutex);
-		ch = getchar();
+	while (status){
+		if (kbhit()){
+			if (!frog.y) map[frog.x][frog.y] = '|';
+			else map[frog.x][frog.y] = ' ';
+			switch (getch()){
+				case 'w':
+					frog.x--;
+					break;
+				case 's':
+					frog.x++;
+					break;
+				case 'a':
+					frog.y--;
+					break;
+				case 'd':
+					frog.y++;
+					break;
+				case 'q':
+					status = 0;
+					pthread_exit(NULL);
+					break;
+			}
+			pthread_cond_broadcast(&eventcond);
+		}
 	}
-
 }
-void kb_listen( void *t ){
-	pthread_mutex_lock(&kbmutex);
-	while (true){
 
+void *draw_map(void *t){
+	/*  Draw the map  */
+	while (status){
+		pthread_cond_wait(&eventcond, &eventmutex);
+		system("clear");
+		memset(map, 0, sizeof(map));	
+		for(int j = 0; j < COLUMN - 1; ++j )	
+			map[ROW][j] = map[0][j] = '|' ;
+		map[frog.x][frog.y] = '0';
+		for( int i = 0; i <= ROW; ++i)	
+			puts( map[i] );
 	}
+	pthread_exit(NULL);
 }
+
+
 int main( int argc, char *argv[] ){
+	pthread_t logs_thread, frog_thread, kb_thread, display_thread;
+	frog = Node( ROW, (COLUMN-1) / 2 ) ;// Frog initially at the lower bank, in the middle.
 	pthread_mutex_init(&kbmutex, NULL);
 	pthread_cond_init(&kbcond, NULL);
-	// Initialize the river map and frog's starting position
-	memset( map , 0, sizeof( map ) ) ;
-	// Initiazlize the river
-	int i , j , ch; 
-	for( i = 1; i < ROW; ++i ){	
-		for( j = 0; j < COLUMN - 1; ++j )	
-			map[i][j] = ' ' ;  
-	}	
-	// Initialize the river bank
-	for( j = 0; j < COLUMN - 1; ++j )// Upper bank	
-		map[ROW][j] = map[0][j] = '|' ;
-
-	for( j = 0; j < COLUMN - 1; ++j )// Lower bank	
-		map[0][j] = map[0][j] = '|' ;
-
-	frog = Node( ROW, (COLUMN-1) / 2 ) ;// Frog initially at the lower bank, in the middle.
-	map[frog.x][frog.y] = '0' ; 
-
-	//Print the map into screen
-	for( i = 0; i <= ROW; ++i)	
-		puts( map[i] );
-
-
+	pthread_mutex_init(&eventmutex, NULL);
+	pthread_cond_init(&eventcond, NULL);
+	// pthread_create(&display_thread, NULL, draw_map, NULL);
+	// pthread_create(&logs_thread, NULL, logs_move, NULL);
+	pthread_create(&frog_thread, NULL, frog_move, NULL);
+	// pthread_join(logs_thread, NULL);
+	// pthread_join(display_thread, NULL);
+	pthread_join(frog_thread, NULL);
 	/*  Create pthreads for wood move and frog control.  */
-	// pthread_t frog_thread, kb_thread, log_thread, monitor_thread;
-
-	// pthread_join(monitor_thread, NULL ) ;
 	/*  Display the output for user: win, lose or quit.  */
-
-	// pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-	// pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+	pthread_mutex_destroy(&kbmutex);
+	pthread_mutex_destroy(&eventmutex);
+	pthread_cond_destroy(&eventcond);
+	pthread_cond_destroy(&kbcond);
 	return 0;
-
 }
