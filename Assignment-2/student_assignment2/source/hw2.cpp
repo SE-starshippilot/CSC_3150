@@ -10,8 +10,10 @@
 
 #define ROW 10
 #define COLUMN 50 
+#define LOG_LENGTH 15
 
-
+pthread_mutex_t kbmutex;
+pthread_cond_t kbcond;
 struct Node{
 	int x , y; 
 	Node( int _x , int _y ) : x( _x ) , y( _y ) {}; 
@@ -19,9 +21,7 @@ struct Node{
 } frog ; 
 
 /*
- +-----------------> COLUMN++
- |
- |
+ +--------> COLUMN++
  |
  |
  v
@@ -32,7 +32,7 @@ char map[ROW+10][COLUMN] ;
 // Determine a keyboard is hit or not. If yes, return 1. If not, return 0. 
 int kbhit(void){
 	struct termios oldt, newt;
-	int ch;
+	int ch, retval;
 	int oldf;
 
 	tcgetattr(STDIN_FILENO, &oldt);
@@ -52,6 +52,7 @@ int kbhit(void){
 
 	if(ch != EOF)
 	{
+		retval = ch;
 		ungetc(ch, stdin);
 		return 1;
 	}
@@ -72,15 +73,33 @@ void *logs_move( void *t ){
 
 	/*  Print the map on the screen  */
 
-	
+	return t;
 }
 
-int main( int argc, char *argv[] ){
+void *frog_move( void *t ){
 
+	/*  Move the frog  */
+	char ch;
+	pthread_mutex_lock(&kbmutex);
+	while (true){
+		pthread_cond_wait(&kbcond, &kbmutex);
+		ch = getchar();
+	}
+
+}
+void kb_listen( void *t ){
+	pthread_mutex_lock(&kbmutex);
+	while (true){
+
+	}
+}
+int main( int argc, char *argv[] ){
+	pthread_mutex_init(&kbmutex, NULL);
+	pthread_cond_init(&kbcond, NULL);
 	// Initialize the river map and frog's starting position
 	memset( map , 0, sizeof( map ) ) ;
 	// Initiazlize the river
-	int i , j ; 
+	int i , j , ch; 
 	for( i = 1; i < ROW; ++i ){	
 		for( j = 0; j < COLUMN - 1; ++j )	
 			map[i][j] = ' ' ;  
@@ -101,10 +120,13 @@ int main( int argc, char *argv[] ){
 
 
 	/*  Create pthreads for wood move and frog control.  */
+	// pthread_t frog_thread, kb_thread, log_thread, monitor_thread;
 
-	
+	// pthread_join(monitor_thread, NULL ) ;
 	/*  Display the output for user: win, lose or quit.  */
 
+	// pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	// pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 	return 0;
 
 }
