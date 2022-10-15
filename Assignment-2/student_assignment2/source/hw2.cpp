@@ -23,11 +23,12 @@ struct Node{
 } frog ; 
 
 /*
- +--------> COLUMN++
+ +--------> COLUMN++ (y++)
  |
  |
  v
- ROW++ 
+ ROW++
+ (x++) 
 */
 char map[ROW][COLUMN] ; 
 int status=1;
@@ -81,26 +82,25 @@ void *frog_move( void *t ){
 	/*  Move the frog  */
 	while (status){
 		if (kbhit()){
-			if (!frog.y) map[frog.x][frog.y] = '|';
-			else map[frog.x][frog.y] = ' ';
-			switch (getch()){
+			switch (getchar()){
 				case 'w':
-					frog.x--;
+					if(frog.x && frog.x--);
 					break;
 				case 's':
-					frog.x++;
+					if(frog.x < ROW && frog.x++);
 					break;
 				case 'a':
-					frog.y--;
+					if(frog.y && frog.y--);
 					break;
 				case 'd':
-					frog.y++;
+					if(frog.y < COLUMN && frog.y++);
 					break;
 				case 'q':
 					status = 0;
 					pthread_exit(NULL);
 					break;
 			}
+			// printf("Frog location:\n (%d, %d)\n", frog.x, frog.y);
 			pthread_cond_broadcast(&eventcond);
 		}
 	}
@@ -108,13 +108,20 @@ void *frog_move( void *t ){
 
 void *draw_map(void *t){
 	/*  Draw the map  */
+	int i, j;
 	while (status){
 		pthread_cond_wait(&eventcond, &eventmutex);
-		system("clear");
-		memset(map, 0, sizeof(map));	
-		for(int j = 0; j < COLUMN - 1; ++j )	
+		for( i = 1; i < ROW; ++i ){	
+			for( j = 0; j < COLUMN - 1; ++j )	
+				map[i][j] = ' ' ;  
+		}	
+		for( j = 0; j < COLUMN - 1; ++j )// Upper bank	
 			map[ROW][j] = map[0][j] = '|' ;
-		map[frog.x][frog.y] = '0';
+
+		for( j = 0; j < COLUMN - 1; ++j )// Lower bank	
+			map[0][j] = map[0][j] = '|' ;
+		map[frog.x][frog.y] = 'x';
+		system("clear");
 		for( int i = 0; i <= ROW; ++i)	
 			puts( map[i] );
 	}
@@ -129,11 +136,11 @@ int main( int argc, char *argv[] ){
 	pthread_cond_init(&kbcond, NULL);
 	pthread_mutex_init(&eventmutex, NULL);
 	pthread_cond_init(&eventcond, NULL);
-	// pthread_create(&display_thread, NULL, draw_map, NULL);
-	// pthread_create(&logs_thread, NULL, logs_move, NULL);
+	pthread_create(&display_thread, NULL, draw_map, NULL);
+	pthread_create(&logs_thread, NULL, logs_move, NULL);
 	pthread_create(&frog_thread, NULL, frog_move, NULL);
-	// pthread_join(logs_thread, NULL);
-	// pthread_join(display_thread, NULL);
+	pthread_join(logs_thread, NULL);
+	pthread_join(display_thread, NULL);
 	pthread_join(frog_thread, NULL);
 	/*  Create pthreads for wood move and frog control.  */
 	/*  Display the output for user: win, lose or quit.  */
