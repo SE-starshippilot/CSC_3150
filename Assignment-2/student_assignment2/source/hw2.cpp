@@ -9,6 +9,9 @@
 #include <fcntl.h>
 #include <vector>
 #include <iostream>
+#include <cstdlib>
+#include <algorithm>
+#include <random>
 
 #define ROW 10
 #define COLUMN 50 
@@ -33,6 +36,7 @@ struct Node{
 char map[ROW][COLUMN] ; 
 int status=1;
 int test_log=20;
+std::vector<int> logs_head(9);
 // Determine a keyboard is hit or not. (If yes, return 1. If not, return 0. )
 int kbhit(void){
 	struct termios oldt, newt;
@@ -154,6 +158,10 @@ void *draw_map(void *t){
 
 int main( int argc, char *argv[] ){
 	pthread_t logs_thread, frog_thread, kb_thread, display_thread;
+	std::random_device rd;
+	std::mt19937 me{rd()};
+	std::uniform_int_distribution<int> distrib(0, COLUMN-1);
+	std::generate(logs_head.begin(), logs_head.end(), [&distrib, &me](){return distrib(me);});
 	frog = Node( ROW, (COLUMN-1) / 2 ) ;// Frog initially at the lower bank, in the middle.
 	for(int i = 1; i < ROW; ++i ){	
 		for(int j = 0; j < COLUMN ; ++j )	
