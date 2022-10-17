@@ -100,7 +100,6 @@ void *frog_move( void *t ){
 					pthread_exit(NULL);
 					break;
 			}
-			// printf("Frog location:\n (%d, %d)\n", frog.x, frog.y);
 			pthread_cond_broadcast(&eventcond);
 		}
 	}
@@ -111,17 +110,17 @@ void *draw_map(void *t){
 	int i, j;
 	while (status){
 		pthread_cond_wait(&eventcond, &eventmutex);
+		system("clear");
 		for( i = 1; i < ROW; ++i ){	
 			for( j = 0; j < COLUMN - 1; ++j )	
 				map[i][j] = ' ' ;  
 		}	
-		for( j = 0; j < COLUMN - 1; ++j )// Upper bank	
+		for( j = 0; j < COLUMN; ++j )// Upper bank	
 			map[ROW][j] = map[0][j] = '|' ;
 
-		for( j = 0; j < COLUMN - 1; ++j )// Lower bank	
+		for( j = 0; j < COLUMN; ++j )// Lower bank	
 			map[0][j] = map[0][j] = '|' ;
 		map[frog.x][frog.y] = 'x';
-		system("clear");
 		for( int i = 0; i <= ROW; ++i)	
 			puts( map[i] );
 	}
