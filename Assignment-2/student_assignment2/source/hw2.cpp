@@ -66,7 +66,7 @@ void *logs_move( void *t ){
 	while (status==1){
 		pthread_cond_broadcast(&eventcond);
 		test_log = (test_log+1)%COLUMN;
-		sleep(1);
+		usleep(100000);
 	}
 
 	/*  Move the logs  */
@@ -119,9 +119,22 @@ void *draw_map(void *t){
 				map[i][j] = ' ' ;  
 		} //canvas
 		for( j = 0; j < COLUMN; ++j ){
-			map[ROW][j] = map[0][j] ='|' ;// Upper bank and lower bank	
-		}	
-		map[frog.row][frog.col] = '0';
+			map[ROW][j] = map[0][j] ='|' ;
+		}// Upper bank and lower bank
+		if(test_log - LOG_LENGTH + 1< 0){
+			for( j = 0; j <= test_log; ++j ){
+				map[3][j]  ='=' ;
+			}
+			for ( j = (test_log - LOG_LENGTH - 1 + COLUMN) % 50; j < COLUMN; ++j){
+				map[3][j] ='=' ;
+			}
+		}
+		else{
+			for( j = test_log - LOG_LENGTH+1; j <= test_log; ++j ){
+				map[3][j] = '=' ;
+			}
+		}//test log
+		map[frog.row][frog.col] = '0';//frog
 		for( int i = 0; i <= ROW; ++i){	
 			for (int j = 0; j < COLUMN; ++j){
 			std::cout << map[i][j];
