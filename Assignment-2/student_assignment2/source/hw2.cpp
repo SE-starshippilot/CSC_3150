@@ -7,32 +7,32 @@
 #include <curses.h>
 #include <termios.h>
 #include <fcntl.h>
+#include <vector>
+#include <iostream>
 
 #define ROW 10
 #define COLUMN 50 
 #define LOG_LENGTH 15
 
-pthread_mutex_t kbmutex;
-pthread_cond_t kbcond;
 pthread_mutex_t eventmutex;
 pthread_cond_t eventcond;
 struct Node{
-	int x , y; 
-	Node( int _x , int _y ) : x( _x ) , y( _y ) {}; 
+	int row , col; 
+	Node( int _row , int _col ) : row( _row ) , col( _col ) {}; 
 	Node(){} ; 
 } frog ; 
 
 /*
- +--------> COLUMN++ (y++)
+ +--------> COLUMN++ (col++)
  |
  |
  v
  ROW++
- (x++) 
+ (row++) 
 */
 char map[ROW][COLUMN] ; 
 int status=1;
-int gametime=0;
+int test_log=20;
 // Determine a keyboard is hit or not. (If yes, return 1. If not, return 0. )
 int kbhit(void){
 	struct termios oldt, newt;
@@ -63,67 +63,77 @@ int kbhit(void){
 }
 
 void *logs_move( void *t ){
+	while (status==1){
+		pthread_cond_broadcast(&eventcond);
+		test_log = (test_log+1)%COLUMN;
+		sleep(1);
+	}
 
 	/*  Move the logs  */
-
-
+	// std::vector<int> log_length(ROW-2,LOG_LENGTH);
 	/*  Check keyboard hits, to change frog's position or quit the game. */
 
 	
 	/*  Check game's status  */
-	while (status){
-		sleep(1);
-		pthread_cond_broadcast(&eventcond);
-	}
-	pthread_exit(NULL);
+	// pthread_exit(NULL);
 }
 
 void *frog_move( void *t ){
 	/*  Move the frog  */
-	while (status){
+	while (status==1){
 		if (kbhit()){
 			switch (getchar()){
 				case 'w':
-					if(frog.x && frog.x--);
+					if(frog.row) frog.row--;
+					if(!frog.row) status = 0;//win
 					break;
 				case 's':
-					if(frog.x < ROW && frog.x++);
+					if(frog.row < ROW ) frog.row++;
 					break;
 				case 'a':
-					if(frog.y && frog.y--);
+					if(frog.col)frog.col--;
+					if(!frog.col) status = 2;//lose, hit left border
 					break;
 				case 'd':
-					if(frog.y < COLUMN && frog.y++);
+					if(frog.col < COLUMN ) frog.col++;
+					if(frog.col == COLUMN ) status = 2;//lose, hit right border
 					break;
 				case 'q':
 					status = 0;
-					pthread_exit(NULL);
 					break;
 			}
-			// printf("Frog location:\n (%d, %d)\n", frog.x, frog.y);
 			pthread_cond_broadcast(&eventcond);
 		}
 	}
+	pthread_exit(NULL);
 }
 
 void *draw_map(void *t){
 	/*  Draw the map  */
 	int i, j;
-	while (status){
+	while (status==1){
 		pthread_cond_wait(&eventcond, &eventmutex);
-		for( i = 1; i < ROW; ++i ){	
-			for( j = 0; j < COLUMN - 1; ++j )	
-				map[i][j] = ' ' ;  
-		}	
-		for( j = 0; j < COLUMN - 1; ++j )// Upper bank	
-			map[ROW][j] = map[0][j] = '|' ;
-
-		for( j = 0; j < COLUMN - 1; ++j )// Lower bank	
-			map[0][j] = map[0][j] = '|' ;
-		map[frog.x][frog.y] = 'x';
 		system("clear");
-		for( int i = 0; i <= ROW; ++i)	
-			puts( map[i] );
+		for( i = 1; i < ROW; ++i ){	
+			for( j = 0; j < COLUMN ; ++j )	
+				map[i][j] = ' ' ;  
+		} //canvas
+		for( j = 0; j < COLUMN; ++j ){
+			map[ROW][j] = map[0][j] ='|' ;// Upper bank and lower bank	
+		}	
+		map[frog.row][frog.col] = '0';
+		for( int i = 0; i <= ROW; ++i){	
+			for (int j = 0; j < COLUMN; ++j){
+			std::cout << map[i][j];
+			}
+			std::cout << std::endl;
+		}
+	}
+	system("clear");
+	if (status == 0){
+		printf("You Win!\n");
+	} else if (status == 2){
+		printf("Game Over!\n");
 	}
 	pthread_exit(NULL);
 }
@@ -132,8 +142,15 @@ void *draw_map(void *t){
 int main( int argc, char *argv[] ){
 	pthread_t logs_thread, frog_thread, kb_thread, display_thread;
 	frog = Node( ROW, (COLUMN-1) / 2 ) ;// Frog initially at the lower bank, in the middle.
-	pthread_mutex_init(&kbmutex, NULL);
-	pthread_cond_init(&kbcond, NULL);
+	for(int i = 1; i < ROW; ++i ){	
+		for(int j = 0; j < COLUMN ; ++j )	
+			map[i][j] = ' ' ;  
+	} //ca
+	for(int j = 0; j < COLUMN; ++j ){
+		map[ROW][j] = map[0][j] ='|' ;// Upper bank and lower bank	
+	}	
+	map[frog.row][frog.col] = '0';
+
 	pthread_mutex_init(&eventmutex, NULL);
 	pthread_cond_init(&eventcond, NULL);
 	pthread_create(&display_thread, NULL, draw_map, NULL);
@@ -144,9 +161,7 @@ int main( int argc, char *argv[] ){
 	pthread_join(frog_thread, NULL);
 	/*  Create pthreads for wood move and frog control.  */
 	/*  Display the output for user: win, lose or quit.  */
-	pthread_mutex_destroy(&kbmutex);
 	pthread_mutex_destroy(&eventmutex);
 	pthread_cond_destroy(&eventcond);
-	pthread_cond_destroy(&kbcond);
 	return 0;
 }
