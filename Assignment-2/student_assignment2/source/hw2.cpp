@@ -129,15 +129,15 @@ void* logs_move(void* t) {
 			}
 		}
 
-		/* frog will move with log by 1 column*/
+		/* frog will move with log by 1 column if it's on one*/
 		if (frog.row % 2) {
 			if (
-				(logs_head_arr[frog.row] - LOG_LENGTH + 1 >= 0 &&
-					frog.col >= logs_head_arr[frog.row] - LOG_LENGTH + 1 && frog.col <= logs_head_arr[frog.row])
-				|| (logs_head_arr[frog.row] - LOG_LENGTH + 1 < 0 &&
-					(frog.col >= logs_head_arr[frog.row] - LOG_LENGTH + 1 + COLUMN || frog.col <= logs_head_arr[frog.row]))
+				(logs_head_arr[frog.row-1] - LOG_LENGTH + 1 >= 0 &&
+					frog.col >= logs_head_arr[frog.row-1] - LOG_LENGTH + 1 && frog.col <= logs_head_arr[frog.row-1])
+				|| (logs_head_arr[frog.row-1] - LOG_LENGTH + 1 < 0 &&
+					(frog.col >= logs_head_arr[frog.row-1] - LOG_LENGTH + 1 + COLUMN || frog.col <= logs_head_arr[frog.row-1]))
 				) {
-				frog.col--;
+				frog.col++;
 			}
 			else {
 				status = 0;
@@ -145,12 +145,12 @@ void* logs_move(void* t) {
 		}
 		else if (frog.row != 0 && frog.row != ROW) {
 			if (
-				(logs_head_arr[frog.row] + LOG_LENGTH - 1 < COLUMN &&
-					frog.col >= logs_head_arr[frog.row] && frog.col <= logs_head_arr[frog.row] + LOG_LENGTH - 1)
-				|| (logs_head_arr[frog.row] + LOG_LENGTH - 1 >= COLUMN &&
-					(frog.col >= logs_head_arr[frog.row] || frog.col <= logs_head_arr[frog.row] + LOG_LENGTH - 1 - COLUMN))
+				(logs_head_arr[frog.row-1] + LOG_LENGTH - 1 < COLUMN &&
+					frog.col >= logs_head_arr[frog.row-1] && frog.col <= logs_head_arr[frog.row-1] + LOG_LENGTH - 1)
+				|| (logs_head_arr[frog.row-1] + LOG_LENGTH - 1 >= COLUMN &&
+					(frog.col >= logs_head_arr[frog.row-1] || frog.col <= logs_head_arr[frog.row-1] + LOG_LENGTH - 1 - COLUMN))
 				) {
-				frog.col++;
+				frog.col--;
 			}
 			else {
 				status = 0;
