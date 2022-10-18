@@ -18,10 +18,7 @@
 #define ROW 10
 #define COLUMN 50 
 #define LOG_LENGTH 15
-#define KB_EVENT 0b01
-#define LOG_EVENT 0b10
 
-int event_id = 0b00;
 pthread_mutex_t eventmutex;
 pthread_cond_t eventcond;
 struct Node{
@@ -41,7 +38,7 @@ struct Node{
 char map[ROW][COLUMN] ; 
 int status=1;
 int test_log=20;
-std::vector<int> logs_head(9);
+// std::vector<int> logs_head(9);
 // Determine a keyboard is hit or not. (If yes, return 1. If not, return 0. )
 int kbhit(void){
 	struct termios oldt, newt;
@@ -76,28 +73,6 @@ void draw_map(){
 	/*  Draw the map  */
 	int i, j;
 	system("clear");
-	/* move the elements on canvas */
-	if (event_id & LOG_EVENT){
-		// for (i=0;i<ROW;i++){
-		// 	for (j=0;j<COLUMN;j++){
-		// 		map[i][j]=' ';
-		// 	}
-		// }
-		// for (i=0;i<ROW-2;i++){
-		// 	for (j=0;j<LOG_LENGTH;j++){
-		// 		map[i+1][(logs_head[i]+j)%COLUMN]='-';
-		// 	}
-		// }
-		// map[frog.row][frog.col]='@';
-		// for (i=0;i<ROW;i++){
-		// 	for (j=0;j<COLUMN;j++){
-		// 		printf("%c",map[i][j]);
-		// 	}
-		// 	printf("\n");
-		// }
-		}
-
-	/*Draw the board*/
 	for( i = 1; i < ROW; ++i ){	
 		for( j = 0; j < COLUMN ; ++j )	
 			map[i][j] = ' ' ;  
@@ -105,32 +80,11 @@ void draw_map(){
 	for( j = 0; j < COLUMN; ++j ){
 		map[ROW][j] = map[0][j] ='|' ;
 	}// Upper bank and lower bank
-	event_id = 0b00;
 	printf("Frog's location: (%d,%d)\n", frog.row, frog.col);
-	// if(test_log - LOG_LENGTH + 1< 0){
-	// 	for( j = 0; j <= test_log; ++j ){
-	// 		map[3][j]  ='=' ;
-	// 	}
-	// 	for ( j = (test_log - LOG_LENGTH - 1 + COLUMN) % 50; j < COLUMN; ++j){
-	// 		map[3][j] ='=' ;
-	// 	}
-	// }
-	// else{
-	// 	for( j = test_log - LOG_LENGTH+1; j <= test_log; ++j ){
-	// 		map[3][j] = '=' ;
-	// 	}
-	// }//test log
-	// map[frog.row][frog.col] = '0';//frog
-	// for( int i = 0; i <= ROW; ++i){	
-	// 	for (int j = 0; j < COLUMN; ++j){
-	// 	std::cout << map[i][j];
-	// 	}
-	// 	std::cout << std::endl;
-	// }
 }
 
 
-void *logs_move( void *t ){
+void *logs_move(){
 	while (status==1){
 		pthread_mutex_lock(&eventmutex);
 		draw_map();
@@ -155,7 +109,7 @@ void *listen_keyboard( void *t ){
 		pthread_mutex_lock(&eventmutex);
 		if (kbhit()){
 			bool moved = false;
-			char c = getchar();
+			char c = (char) getchar();
 			if (c=='w' || c=='W'){
 				frog.row--;
 				moved = true;
@@ -185,27 +139,12 @@ void *listen_keyboard( void *t ){
 
 int main( int argc, char *argv[] ){
 	pthread_t /*logs_thread,*/ kb_thread;
-	// std::random_device rd;
-	// std::mt19937 me{rd()};
-	// std::uniform_int_distribution<int> distrib(0, COLUMN-1);
-	// std::generate(logs_head.begin(), logs_head.end(), [&distrib, &me](){return distrib(me);});
+	memset(map, 0, sizeof(map));
 	frog = Node( ROW, (COLUMN-1) / 2 ) ;// Frog initially at the lower bank, in the middle.
-	// for(int i = 1; i < ROW; ++i ){	
-	// 	for(int j = 0; j < COLUMN ; ++j )	
-	// 		map[i][j] = ' ' ;  
-	// } //ca
-	// for(int j = 0; j < COLUMN; ++j ){
-	// 	map[ROW][j] = map[0][j] ='|' ;// Upper bank and lower bank	
-	// }	
-	// map[frog.row][frog.col] = '0';
-
+	draw_map();
 	pthread_mutex_init(&eventmutex, NULL);
-	// pthread_cond_init(&eventcond, NULL);
-	// pthread_create(&logs_thread, NULL, logs_move, NULL);
 	pthread_create(&kb_thread, NULL, listen_keyboard, NULL);
-	// pthread_join(logs_thread, NULL);
 	pthread_join(kb_thread, NULL);
-	/* Evaluate exit status */
 	system("clear");
 	switch (status){
 		case 0:
@@ -219,9 +158,7 @@ int main( int argc, char *argv[] ){
 			break;
 	}
 	printf("main thread exit\n");
-	/*  Create pthreads for wood move and frog control.  */
-	/*  Display the output for user: win, lose or quit.  */
-	// pthread_cond_destroy(&eventcond);
 	pthread_mutex_destroy(&eventmutex);
+	pthread_exit(NULL);
 	return 0;
 }
