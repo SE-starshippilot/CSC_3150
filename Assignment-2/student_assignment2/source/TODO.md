@@ -1,0 +1,2 @@
+- [ ] The frog can still move 1 column outside of log
+- [ ] Change the ugly structure of log_head, find a way to uniformly modify log from rows
