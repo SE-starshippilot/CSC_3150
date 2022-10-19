@@ -18,6 +18,7 @@
 #define ROW 10
 #define COLUMN 50 
 #define LOG_LENGTH 15
+#define LOG_SPEED 400000
 
 pthread_mutex_t eventmutex;
 pthread_cond_t eventcond;
@@ -71,6 +72,7 @@ int kbhit(void) {
 
 void draw_map() {
 	system("clear");
+
 	for (int i = 1; i < ROW; ++i) {
 		for (int j = 0; j < COLUMN; ++j)
 			map[i][j] = ' ';
@@ -106,7 +108,9 @@ void draw_map() {
 			}
 		}
 	}// Logs
-	map[frog.row][frog.col] = '0';
+
+	map[frog.row][frog.col] = '0';//frog
+	
 	for (int i = 0; i <= ROW; ++i) {
 		for (int j = 0; j < COLUMN; ++j)
 			printf("%c", map[i][j]);
@@ -141,6 +145,8 @@ void* logs_move(void* t) {
 			}
 			else {
 				status = 0;
+				pthread_mutex_unlock(&eventmutex);
+				break;
 			}
 		}
 		else if (frog.row != 0 && frog.row != ROW) {
@@ -154,18 +160,20 @@ void* logs_move(void* t) {
 			}
 			else {
 				status = 0;
+				pthread_mutex_unlock(&eventmutex);
+				break;
 			}
 		}
 		draw_map();
 		pthread_mutex_unlock(&eventmutex);
-		usleep(400000);
+		usleep(LOG_SPEED);
 		/*  Move the logs  */
 		/*  Check game's status  */
 		// pthread_exit(NULL);
 	}
-	printf("logs_move thread exit\n");
 	pthread_exit(NULL);
 }
+
 void* listen_keyboard(void* t) {
 	while (status == 1) {
 		pthread_mutex_lock(&eventmutex);
@@ -190,13 +198,22 @@ void* listen_keyboard(void* t) {
 			}
 			else if (c == 'q' || c == 'Q') {
 				status = 3; // quit
+				break;
 				pthread_mutex_unlock(&eventmutex);
 			}
 			if (moved) draw_map();
 			/* judge game status */
-			if (!frog.row) status = 2; // win
+			if (!frog.row){
+				status = 2; // win
+				pthread_mutex_unlock(&eventmutex);
+				break;
+			}
 			if (!(!frog.row || frog.row == ROW)				// the frog is between the banks
-				&& (!frog.col || frog.col == COLUMN - 1)) 	/* and is at the border*/status = 0; // lose
+				&& (!frog.col || frog.col == COLUMN - 1)) 	/* and is at the border*/
+				{status = 0; // lose
+				pthread_mutex_unlock(&eventmutex);
+				break;
+			}
 		}
 		pthread_mutex_unlock(&eventmutex);
 	}
