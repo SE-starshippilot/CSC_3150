@@ -202,6 +202,7 @@ void* listen_keyboard(void* t) {
 				pthread_mutex_unlock(&eventmutex);
 			}
 			if (moved) draw_map();
+
 			/* judge game status */
 			if (!frog.row){
 				status = 2; // win
