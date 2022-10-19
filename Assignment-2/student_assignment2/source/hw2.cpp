@@ -251,6 +251,5 @@ int main(int argc, char* argv[]) {
 		break;
 	}
 	pthread_mutex_destroy(&eventmutex);
-	pthread_exit(NULL);
 	return 0;
 }
