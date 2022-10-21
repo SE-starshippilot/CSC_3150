@@ -19,6 +19,10 @@
 #define COLUMN 50 
 #define LOG_LENGTH 15
 #define LOG_SPEED 400000
+#define HIT_BORDER(col) (!col || col== COLUMN - 1)
+#define FALL_WATER(row, col) 
+#define log_right(log_left) (log_left + LOG_LENGTH - 1) % COLUMN
+
 
 pthread_mutex_t eventmutex;
 pthread_cond_t eventcond;
@@ -37,7 +41,7 @@ struct Node {
  (row++)
 */
 char map[ROW + 10][COLUMN];
-int logs_head_arr[ROW];
+int logs_left_arr[ROW - 1];
 int status = 1;
 int test_log = 20;
 // Determine a keyboard is hit or not. (If yes, return 1. If not, return 0. )
@@ -69,7 +73,6 @@ int kbhit(void) {
 	return 0;
 }
 
-
 void draw_map() {
 	system("clear");
 
@@ -83,29 +86,15 @@ void draw_map() {
 	}// Upper bank and lower bank
 
 	for (int i = 1; i < ROW; ++i) {
-		if (i % 2) {
-			if (logs_head_arr[i - 1] - LOG_LENGTH + 1 < 0) {
-				for (int j = 0; j <= logs_head_arr[i - 1]; ++j)
-					map[i][j] = '=';
-				for (int j = logs_head_arr[i - 1] - LOG_LENGTH + 1 + COLUMN; j < COLUMN; ++j)
-					map[i][j] = '=';
-			}
-			else {
-				for (int j = logs_head_arr[i - 1] - LOG_LENGTH + 1; j <= logs_head_arr[i - 1]; ++j)
-					map[i][j] = '=';
-			}
+		if (log_right(logs_left_arr[i-1]) < logs_left_arr[i-1]) {
+			for (int j = 0; j <= log_right(logs_left_arr[i-1]); ++j)
+				map[i][j] = '=';
+			for (int j = logs_left_arr[i-1]; j < COLUMN; ++j)
+				map[i][j] = '=';
 		}
 		else {
-			if (logs_head_arr[i - 1] + LOG_LENGTH - 1 >= COLUMN) {
-				for (int j = logs_head_arr[i - 1]; j < COLUMN; ++j)
-					map[i][j] = '=';
-				for (int j = 0; j <= logs_head_arr[i - 1] + LOG_LENGTH - 1 - COLUMN; ++j)
-					map[i][j] = '=';
-			}
-			else {
-				for (int j = logs_head_arr[i - 1]; j <= logs_head_arr[i - 1] + LOG_LENGTH - 1; ++j)
-					map[i][j] = '=';
-			}
+			for (int j = logs_left_arr[i-1]; j <= log_right(logs_left_arr[i-1]); ++j)
+				map[i][j] = '=';
 		}
 	}// Logs
 
@@ -124,52 +113,23 @@ void* logs_move(void* t) {
 		/* move the logs by 1 column*/
 		for (int i = 0; i < ROW; ++i) {
 			if (i % 2) {
-				logs_head_arr[i]--;
-				if (logs_head_arr[i] < 0) logs_head_arr[i] = COLUMN - 1;
+				logs_left_arr[i]--;
+				if (logs_left_arr[i] < 0) logs_left_arr[i] = COLUMN - 1;
 			}
 			else {
-				logs_head_arr[i]++;
-				if (logs_head_arr[i] == COLUMN) logs_head_arr[i] = 0;
+				logs_left_arr[i]++;
+				if (logs_left_arr[i] == COLUMN) logs_left_arr[i] = 0;
 			}
 		}
 
 		/* frog will move with log by 1 column if it's on one*/
-		if (frog.row % 2) {
-			if (
-				(logs_head_arr[frog.row-1] - LOG_LENGTH + 1 >= 0 &&
-					frog.col >= logs_head_arr[frog.row-1] - LOG_LENGTH + 1 && frog.col <= logs_head_arr[frog.row-1])
-				|| (logs_head_arr[frog.row-1] - LOG_LENGTH + 1 < 0 &&
-					(frog.col >= logs_head_arr[frog.row-1] - LOG_LENGTH + 1 + COLUMN || frog.col <= logs_head_arr[frog.row-1]))
-				) {
-				frog.col++;
-			}
-			else {
-				status = 0;
-				pthread_mutex_unlock(&eventmutex);
-				break;
-			}
-		}
-		else if (frog.row != 0 && frog.row != ROW) {
-			if (
-				(logs_head_arr[frog.row-1] + LOG_LENGTH - 1 < COLUMN &&
-					frog.col >= logs_head_arr[frog.row-1] && frog.col <= logs_head_arr[frog.row-1] + LOG_LENGTH - 1)
-				|| (logs_head_arr[frog.row-1] + LOG_LENGTH - 1 >= COLUMN &&
-					(frog.col >= logs_head_arr[frog.row-1] || frog.col <= logs_head_arr[frog.row-1] + LOG_LENGTH - 1 - COLUMN))
-				) {
-				frog.col--;
-			}
-			else {
-				status = 0;
-				pthread_mutex_unlock(&eventmutex);
-				break;
-			}
-		}
+		if (frog.row % 2)
+			frog.col++;
+		else if (frog.row != 0 && frog.row != ROW)
+			frog.col--;
 		draw_map();
 		pthread_mutex_unlock(&eventmutex);
 		usleep(LOG_SPEED);
-		/*  Move the logs  */
-		/*  Check game's status  */
-		// pthread_exit(NULL);
 	}
 	pthread_exit(NULL);
 }
@@ -201,20 +161,17 @@ void* listen_keyboard(void* t) {
 				break;
 				pthread_mutex_unlock(&eventmutex);
 			}
-			if (moved) draw_map();
 
 			/* judge game status */
-			if (!frog.row){
-				status = 2; // win
+			update_game_status();
+			if (status != 1) {
 				pthread_mutex_unlock(&eventmutex);
 				break;
 			}
-			if (!(!frog.row || frog.row == ROW)				// the frog is between the banks
-				&& (!frog.col || frog.col == COLUMN - 1)) 	/* and is at the border*/
-				{status = 0; // lose
-				pthread_mutex_unlock(&eventmutex);
-				break;
-			}
+
+			/* draw map */
+			if (moved) draw_map();
+
 		}
 		pthread_mutex_unlock(&eventmutex);
 	}
@@ -223,14 +180,29 @@ void* listen_keyboard(void* t) {
 
 void initialize_logs() {
 	for (int i = 0; i < ROW - 1; ++i) {
-		logs_head_arr[i] = rand() % (COLUMN);
+		logs_left_arr[i] = rand() % (COLUMN);
 	}
 }
+
+void update_game_status(){
+	if (frog.row == 0){
+		status = 2;
+	} else if (frog.row < ROW){
+		if(frog.col == 0 || frog.col == COLUMN - 1){
+			status = 0;
+		} // hit the border
+		if ((logs_left_arr[frog.row - 1] < log_right(logs_left_arr[frog.row - 1]) && (frog.col < logs_left_arr[frog.row - 1] || frog.col > log_right(logs_left_arr[frog.row - 1])))
+			|| (logs_left_arr[frog.row - 1] > log_right(logs_left_arr[frog.row - 1]) && (frog.col < logs_left_arr[frog.row - 1] && frog.col > log_right(logs_left_arr[frog.row - 1])))){
+			status = 0;
+		} // fall into the water
+	}
+}
+
 
 int main(int argc, char* argv[]) {
 	pthread_t logs_thread, kb_thread;
 	memset(map, ' ', sizeof(map));
-	memset(logs_head_arr, 0, sizeof(logs_head_arr));
+	memset(logs_left_arr, 0, sizeof(logs_left_arr));
 	frog = Node(ROW, (COLUMN - 1) / 2);// Frog initially at the lower bank, in the middle.
 	initialize_logs();
 	draw_map();
