@@ -47,19 +47,3 @@ void async_run(void (*hanlder)(int), int args) {
     pthread_mutex_unlock(&(*queue).lock);
     pthread_cond_signal(&(*queue).not_empty);
 }
-
-void very_slow_add(int num){
-    int result = num + 10;
-    sleep(2);
-    printf("%d + %d = %d\n", num, 10, result);
-}
-
-
-int main(){
-    async_init(10);
-    for (int i=1; i<60; i++){
-        async_run(very_slow_add, i);
-    }
-    pthread_exit(NULL);
-    return 0;
-}
