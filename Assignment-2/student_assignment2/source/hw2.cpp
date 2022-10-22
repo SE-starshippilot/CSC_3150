@@ -19,8 +19,6 @@
 #define COLUMN 50 
 #define LOG_LENGTH 15
 #define LOG_SPEED 400000
-#define HIT_BORDER(col) (!col || col== COLUMN - 1)
-#define FALL_WATER(row, col) 
 #define log_right(log_left) (log_left + LOG_LENGTH - 1) % COLUMN
 
 
@@ -86,20 +84,20 @@ void draw_map() {
 	}// Upper bank and lower bank
 
 	for (int i = 1; i < ROW; ++i) {
-		if (log_right(logs_left_arr[i-1]) < logs_left_arr[i-1]) {
-			for (int j = 0; j <= log_right(logs_left_arr[i-1]); ++j)
+		if (log_right(logs_left_arr[i - 1]) < logs_left_arr[i - 1]) {
+			for (int j = 0; j <= log_right(logs_left_arr[i - 1]); ++j)
 				map[i][j] = '=';
-			for (int j = logs_left_arr[i-1]; j < COLUMN; ++j)
+			for (int j = logs_left_arr[i - 1]; j < COLUMN; ++j)
 				map[i][j] = '=';
 		}
 		else {
-			for (int j = logs_left_arr[i-1]; j <= log_right(logs_left_arr[i-1]); ++j)
+			for (int j = logs_left_arr[i - 1]; j <= log_right(logs_left_arr[i - 1]); ++j)
 				map[i][j] = '=';
 		}
 	}// Logs
 
 	map[frog.row][frog.col] = '0';//frog
-	
+
 	for (int i = 0; i <= ROW; ++i) {
 		for (int j = 0; j < COLUMN; ++j)
 			printf("%c", map[i][j]);
@@ -134,7 +132,7 @@ void* logs_move(void* t) {
 	pthread_exit(NULL);
 }
 
-void* listen_keyboard(void* t) {
+void* frog_move(void* t) {
 	while (status == 1) {
 		pthread_mutex_lock(&eventmutex);
 		if (kbhit()) {
@@ -184,15 +182,16 @@ void initialize_logs() {
 	}
 }
 
-void update_game_status(){
-	if (frog.row == 0){
+void update_game_status() {
+	if (frog.row == 0) {
 		status = 2;
-	} else if (frog.row < ROW){
-		if(frog.col == 0 || frog.col == COLUMN - 1){
+	}
+	else if (frog.row < ROW) {
+		if (frog.col == 0 || frog.col == COLUMN - 1) {
 			status = 0;
 		} // hit the border
 		if ((logs_left_arr[frog.row - 1] < log_right(logs_left_arr[frog.row - 1]) && (frog.col < logs_left_arr[frog.row - 1] || frog.col > log_right(logs_left_arr[frog.row - 1])))
-			|| (logs_left_arr[frog.row - 1] > log_right(logs_left_arr[frog.row - 1]) && (frog.col < logs_left_arr[frog.row - 1] && frog.col > log_right(logs_left_arr[frog.row - 1])))){
+			|| (logs_left_arr[frog.row - 1] > log_right(logs_left_arr[frog.row - 1]) && (frog.col < logs_left_arr[frog.row - 1] && frog.col > log_right(logs_left_arr[frog.row - 1])))) {
 			status = 0;
 		} // fall into the water
 	}
@@ -200,7 +199,7 @@ void update_game_status(){
 
 
 int main(int argc, char* argv[]) {
-	pthread_t logs_thread, kb_thread;
+	pthread_t logs_thread, frog_thread;
 	memset(map, ' ', sizeof(map));
 	memset(logs_left_arr, 0, sizeof(logs_left_arr));
 	frog = Node(ROW, (COLUMN - 1) / 2);// Frog initially at the lower bank, in the middle.
@@ -208,8 +207,8 @@ int main(int argc, char* argv[]) {
 	draw_map();
 	pthread_mutex_init(&eventmutex, NULL);
 	pthread_create(&logs_thread, NULL, logs_move, NULL);
-	pthread_create(&kb_thread, NULL, listen_keyboard, NULL);
-	pthread_join(kb_thread, NULL);
+	pthread_create(&frog_thread, NULL, frog_move, NULL);
+	pthread_join(frog_thread, NULL);
 	pthread_join(logs_thread, NULL);
 	system("clear");
 	switch (status) {
