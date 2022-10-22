@@ -38,7 +38,7 @@ struct Node {
  ROW++
  (row++)
 */
-char map[ROW + 10][COLUMN];
+char map[ROW + 1][COLUMN];
 int logs_left_arr[ROW - 1];
 int status = 1;
 int test_log = 20;
@@ -133,7 +133,7 @@ void* logs_move(void*) {
 }
 
 void* frog_move(void*) {
-	while (status == 1) {
+	while (1) {
 		pthread_mutex_lock(&eventmutex);
 		if (kbhit()) {
 			bool moved = false;
@@ -213,13 +213,13 @@ int main(int argc, char* argv[]) {
 	system("clear");
 	switch (status) {
 	case 0:
-		std::cout << "You lose!" << std::endl;
+		std::cout << "You lose the game!" << std::endl;
 		break;
 	case 2:
-		std::cout << "You win!" << std::endl;
+		std::cout << "You win the game!" << std::endl;
 		break;
 	case 3:
-		std::cout << "You quit!" << std::endl;
+		std::cout << "You exit the game!" << std::endl;
 		break;
 	}
 	pthread_mutex_destroy(&eventmutex);
