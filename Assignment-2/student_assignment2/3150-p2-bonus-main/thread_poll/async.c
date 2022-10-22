@@ -7,14 +7,14 @@
 #include <stdio.h>
 #include <unistd.h>
 
-my_queue_t *queue;
+my_queue_t* queue;
 
-void *work_container(void *args){
-    while(1){
+void* work_container(void* args) {
+    while (1) {
         pthread_mutex_lock(&(*queue).lock);
-        while((*queue).size == 0)
+        while ((*queue).size == 0)
             pthread_cond_wait(&(*queue).not_empty, &(*queue).lock);
-        my_item_t *item = (*queue).head;
+        my_item_t* item = (*queue).head;
         DL_DELETE((*queue).head, item);
         (*queue).size--;
         pthread_mutex_unlock(&(*queue).lock);
@@ -39,7 +39,7 @@ void async_init(int num_threads) {
 
 void async_run(void (*hanlder)(int), int args) {
     pthread_mutex_lock(&(*queue).lock);
-    my_item_t *item = malloc(sizeof(my_item_t));
+    my_item_t* item = malloc(sizeof(my_item_t));
     item->fx = hanlder;
     item->args = args;
     DL_APPEND((*queue).head, item);
