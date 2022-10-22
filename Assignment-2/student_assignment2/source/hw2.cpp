@@ -105,7 +105,7 @@ void draw_map() {
 	}
 }
 
-void* logs_move(void* t) {
+void* logs_move(void*) {
 	while (status == 1) {
 		pthread_mutex_lock(&eventmutex);
 		/* move the logs by 1 column*/
@@ -132,7 +132,7 @@ void* logs_move(void* t) {
 	pthread_exit(NULL);
 }
 
-void* frog_move(void* t) {
+void* frog_move(void*) {
 	while (status == 1) {
 		pthread_mutex_lock(&eventmutex);
 		if (kbhit()) {
