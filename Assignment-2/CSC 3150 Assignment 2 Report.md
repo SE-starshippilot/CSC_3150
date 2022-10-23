@@ -199,3 +199,7 @@ This function is called whenever user/server receives requests and need to creat
 ![image-20221022165227384](/Users/shitianhao/Library/Application Support/typora-user-images/image-20221022165227384.png)
 
 Using 10 threads , accepting 5000 requests
+
+## Learning Outcome
+
+After this homework, I learned how to create POSIX threads. The creation of different threads opens the door of multithread programming. I also learned how to use mutex locks to wrire thread-safe programs, as well as use conditional variables for communication between different threads.
