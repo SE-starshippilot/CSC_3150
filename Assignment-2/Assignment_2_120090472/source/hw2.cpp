@@ -16,9 +16,9 @@
 #include "hw2.h"
 
 #define ROW 10
-#define COLUMN 50 
+#define COLUMN 50
 #define LOG_LENGTH 15
-#define LOG_SPEED 400000
+#define LOG_SPEED 200000
 #define log_right(log_left) (log_left + LOG_LENGTH - 1) % COLUMN
 
 
