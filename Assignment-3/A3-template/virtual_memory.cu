@@ -2,17 +2,18 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <stdio.h>
+#include <assert.h>
 
 __device__ void init_invert_page_table(VirtualMemory* vm) {
   for (int i = 0; i < vm->PAGE_ENTRIES; i++) {
     vm->invert_page_table[i] = 0x80000000; // invalid := MSB is 1
-    vm->invert_page_table[i + vm->PAGE_ENTRIES] = -1;  // Take the second 1K space as the LRU list 
+    vm->invert_page_table[i + vm->PAGE_ENTRIES] = 0xffffffff;  // Take the second 1K space as the LRU list 
   }
 }
 
 __device__ void init_swap_table(VirtualMemory* vm) {
   for (int i = 0; i < vm->SWAP_TABLE_SIZE; i++) {
-    vm->swap_table[i] = -1; // invalid :-1
+    vm->swap_table[i] = 0xffffffff; // invalid :-1
   }
 }
 
@@ -27,7 +28,7 @@ __device__ int update_lru(VirtualMemory* vm, int page_id) {
   }//find
   if (move_pos == -1) {
     vm->lru_oldest++;
-    move_pos == vm->lru_oldest;
+    move_pos = vm->lru_oldest;
   }// the page is previously not in LRU
   for (int i = vm->PAGE_ENTRIES; i < move_pos; i++) {
     vm->invert_page_table[i + 1] = vm->invert_page_table[i];
@@ -53,10 +54,10 @@ __device__ PageTableQuery get_page_table_entry(VirtualMemory* vm, int page_id) {
   return query;
 }
 
-__device__ int search_swap_table(VirtualMemory* vm, int page_id){
-  for(int i=0; i<vm->SWAP_TABLE_SIZE; i++){
-    if(vm->swap_table[i] == -1) break;
-    if(vm->swap_table[i] == page_id) return i;
+__device__ int search_swap_table(VirtualMemory* vm, int page_id) {
+  for (int i = 0; i < vm->SWAP_TABLE_SIZE; i++) {
+    if (vm->swap_table[i] == 0xffffffff) break;
+    if (vm->swap_table[i] == page_id) return i;
   }
   return -1;
 }
@@ -65,7 +66,7 @@ __device__ void swap_page(VirtualMemory* vm, int disk_page_id, int ram_page, uch
   if (disk_page_id == -1) {
     // Nothing from disk->ram, allocate a place in disk, update the swap table.
     for (int i = 0; i < vm->SWAP_TABLE_SIZE; i++) {
-      if (vm->swap_table[i] == -1) {
+      if (vm->swap_table[i] == 0xffffffff) {
         disk_page_id = i;
         vm->swap_table[i] = ram_page;
         break;
@@ -75,10 +76,10 @@ __device__ void swap_page(VirtualMemory* vm, int disk_page_id, int ram_page, uch
   else {
     // The requested page is stored in disk. Perform disk->ram.
     for (int i = 0; i < vm->PAGESIZE; i++) {
-      vm->storage[disk_page_id*vm->PAGESIZE + i] = vm->buffer[vm->PAGESIZE * ram_page + i];
+      vm->storage[disk_page_id * vm->PAGESIZE + i] = vm->buffer[vm->PAGESIZE * ram_page + i];
     }
   }
-  for (int i=0; i<vm->PAGESIZE; i++) vm->storage[disk_page_id*vm->PAGESIZE + i] = temp[i];
+  for (int i = 0; i < vm->PAGESIZE; i++) vm->storage[disk_page_id * vm->PAGESIZE + i] = temp[i];
 }
 __device__ void vm_init(VirtualMemory* vm, uchar* buffer, uchar* storage,
   u32* invert_page_table, u32* swap_table, int* pagefault_num_ptr,
@@ -95,7 +96,7 @@ __device__ void vm_init(VirtualMemory* vm, uchar* buffer, uchar* storage,
   vm->lru_oldest = PAGESIZE;
 
   // init constants
-  vm->PAGESIZE = PAGESIZE-1;
+  vm->PAGESIZE = PAGESIZE - 1;
   vm->INVERT_PAGE_TABLE_SIZE = INVERT_PAGE_TABLE_SIZE;
   vm->SWAP_TABLE_SIZE = SWAP_TABLE_SIZE;
   vm->PHYSICAL_MEM_SIZE = PHYSICAL_MEM_SIZE;
@@ -104,6 +105,7 @@ __device__ void vm_init(VirtualMemory* vm, uchar* buffer, uchar* storage,
 
   // before first vm_write or vm_read
   init_invert_page_table(vm);
+  init_swap_table(vm);
 }
 
 
@@ -120,20 +122,18 @@ __device__ uchar vm_read(VirtualMemory* vm, u32 addr) {
   }
   else {
     (*vm->pagefault_num_ptr)++;
-    if (res.empty_frame != -1){
+    if (res.empty_frame != -1) {
       physical_addr = res.empty_frame * vm->PAGESIZE + page_offset;
       vm->invert_page_table[res.empty_frame] = vm->invert_page_table[res.empty_frame] & 0x00000000 + page_id;
     }
     else {//the RAM is full and the requested page is in the disk
-      uchar temp_frame[vm->PAGESIZE];
+      uchar temp_frame[32];
       PageTableQuery victim_res = get_page_table_entry(vm, victim_page_id);
-      if (victim_res.frame_id != -1){
-        for(int i=0; i<vm->PAGESIZE; i++){ // transfer the frame to the buffer
-          int _physical_addr = victim_res.frame_id * vm->PAGESIZE + i;
-          temp_frame[i] = vm->buffer[_physical_addr];
-        }
+      assert(victim_res.frame_id != -1);
+      for (int i = 0; i < vm->PAGESIZE; i++) { // transfer the frame to the buffer
+        int _physical_addr = victim_res.frame_id * vm->PAGESIZE + i;
+        temp_frame[i] = vm->buffer[_physical_addr];
       }
-      else perror("cannot find victim page in page table!\n");
 
       int target_disk_page_id = search_swap_table(vm, page_id);
       swap_page(vm, target_disk_page_id, victim_page_id, temp_frame);
@@ -161,15 +161,13 @@ __device__ void vm_write(VirtualMemory* vm, u32 addr, uchar value) {
       physical_addr = res.empty_frame * vm->PAGESIZE + page_offset;
     }
     else {                      //no more vacant space in the RAM, requires swapping
-      uchar temp_frame[vm->PAGESIZE];
+      uchar temp_frame[32];
       PageTableQuery victim_res = get_page_table_entry(vm, victim_page_id);
-      if (victim_res.frame_id != -1){
-        for(int i=0; i<vm->PAGESIZE; i++){ // transfer the frame to the buffer
-          int _physical_addr = victim_res.frame_id * vm->PAGESIZE + i;
-          temp_frame[i] = vm->buffer[_physical_addr];
-        }
+      assert(victim_res.frame_id != -1);
+      for (int i = 0; i < vm->PAGESIZE; i++) { // transfer the frame to the buffer
+        int _physical_addr = victim_res.frame_id * vm->PAGESIZE + i;
+        temp_frame[i] = vm->buffer[_physical_addr];
       }
-      else perror("cannot find victim page in page table!\n");
 
       int target_disk_page_id = search_swap_table(vm, page_id);
       swap_page(vm, target_disk_page_id, victim_page_id, temp_frame);

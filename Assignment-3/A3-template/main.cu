@@ -34,6 +34,7 @@ __device__ __managed__ uchar storage[STORAGE_SIZE];
 extern __shared__ u32 pt[];
 // swap table
 extern __shared__ u32 st[];
+
 __device__ void user_program(VirtualMemory *vm, uchar *input, uchar *results,
                              int input_size);
 
@@ -44,7 +45,7 @@ __global__ void mykernel(int input_size) {
   __shared__ uchar data[PHYSICAL_MEM_SIZE];
 
   VirtualMemory vm;
-  vm_init(&vm, data, storage, pt, &pagefault_num, PAGE_SIZE,
+  vm_init(&vm, data, storage, pt, st, &pagefault_num, PAGE_SIZE,
           INVERT_PAGE_TABLE_SIZE, SWAP_TABLE_SIZE,PHYSICAL_MEM_SIZE, STORAGE_SIZE,
           PHYSICAL_MEM_SIZE / PAGE_SIZE);
 
