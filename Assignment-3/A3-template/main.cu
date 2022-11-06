@@ -13,6 +13,8 @@
 #define PAGE_SIZE (1 << 5)
 // 16 KB in page table
 #define INVERT_PAGE_TABLE_SIZE (1 << 14)
+// 4k in swap table
+#define SWAP_TABLE_SIZE (1<<12)
 // 32 KB in shared memory
 #define PHYSICAL_MEM_SIZE (1 << 15)
 // 128 KB in global memory
@@ -30,7 +32,8 @@ __device__ __managed__ uchar input[STORAGE_SIZE];
 __device__ __managed__ uchar storage[STORAGE_SIZE];
 // page table
 extern __shared__ u32 pt[];
-
+// swap table
+extern __shared__ u32 st[];
 __device__ void user_program(VirtualMemory *vm, uchar *input, uchar *results,
                              int input_size);
 
@@ -42,7 +45,7 @@ __global__ void mykernel(int input_size) {
 
   VirtualMemory vm;
   vm_init(&vm, data, storage, pt, &pagefault_num, PAGE_SIZE,
-          INVERT_PAGE_TABLE_SIZE, PHYSICAL_MEM_SIZE, STORAGE_SIZE,
+          INVERT_PAGE_TABLE_SIZE, SWAP_TABLE_SIZE,PHYSICAL_MEM_SIZE, STORAGE_SIZE,
           PHYSICAL_MEM_SIZE / PAGE_SIZE);
 
   // user program the access pattern for testing paging
