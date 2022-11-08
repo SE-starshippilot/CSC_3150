@@ -8,14 +8,22 @@
 typedef unsigned char uchar;
 typedef uint32_t u32;
 
+struct LRUNode{
+  int page_id;
+  struct LRUNode* prev;
+  struct LRUNode* next;
+};
+
 struct VirtualMemory {
   uchar* buffer;
   uchar* storage;
   u32* invert_page_table;
-  u32* swap_table;
+  int* swap_table;
   int* pagefault_num_ptr;
 
-  int lru_oldest;
+  struct LRUNode* lru_head;
+  struct LRUNode* lru_tail;
+  int lru_size;
 
   int PAGESIZE;
   int INVERT_PAGE_TABLE_SIZE;
@@ -30,9 +38,10 @@ struct PageTableQuery {
   int empty_frame;
 };
 
+
 // TODO
 __device__ void vm_init(VirtualMemory* vm, uchar* buffer, uchar* storage,
-  u32* invert_page_table, u32* swap_table,int* pagefault_num_ptr,
+  u32* invert_page_table,int* pagefault_num_ptr,
   int PAGESIZE, int INVERT_PAGE_TABLE_SIZE, int SWAP_TABLE_SIZE,
   int PHYSICAL_MEM_SIZE, int STORAGE_SIZE,
   int PAGE_ENTRIES);
