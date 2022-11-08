@@ -5,8 +5,9 @@
 
 __device__ void user_program(VirtualMemory *vm, uchar *input, uchar *results,
                              int input_size) {
-
+  input_size = 65535;
   for (int i = 0; i < input_size; i++){
+    printf("Attempting to write %d to %d\n", input[i], i);
     vm_write(vm, i, input[i]);
   }
 
