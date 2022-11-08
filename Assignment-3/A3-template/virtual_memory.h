@@ -33,7 +33,7 @@ struct VirtualMemory {
   int PAGE_ENTRIES;
 };
 
-struct PageTableQuery {
+struct TableQuery {
   int frame_id;
   int empty_frame;
 };
