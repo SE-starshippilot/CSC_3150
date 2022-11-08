@@ -18,8 +18,25 @@ __device__ void init_swap_table(VirtualMemory* vm) {
   }
 }
 __device__ void show_lru(VirtualMemory* vm){
-  for(struct LRUNode* _tmp = vm->lru_head; _tmp!=NULL; _tmp=_tmp->next){
-    printf("%d->", _tmp->page_id);
+  if (vm->lru_size < 8){
+    for(struct LRUNode* _tmp = vm->lru_head; _tmp!=NULL; _tmp=_tmp->next){
+      printf("%d->", _tmp->page_id);
+    }
+  }
+  else{
+    int size = 4;
+    struct LRUNode* _tmp = vm->lru_head;
+    for(int i=0; i<size; i++){
+      printf("%d->", _tmp->page_id);
+      _tmp = _tmp->next;
+    }
+    printf("...->");
+    _tmp = vm->lru_tail;
+    for(int i=0; i<size; i++){
+      printf("%d<-", _tmp->page_id);
+      _tmp = _tmp->prev;
+    }
+    printf("\n");
   }
 }
 __device__ int update_lru(VirtualMemory* vm, int page_id, int is_oldpage) {
@@ -141,13 +158,13 @@ __device__ uchar vm_read(VirtualMemory* vm, u32 addr) {
   PageTableQuery res = query_page_table(vm, page_id);
   if (res.frame_id != -1) {
     physical_addr = res.frame_id * vm->PAGESIZE + page_offset;
-    if (vm->lru_head->page_id != res.frame_id) update_lru(vm, page_id, 1);//get the least recently used page as victim
+    if (vm->lru_head->page_id != page_id) update_lru(vm, page_id, 1);//get the least recently used page as victim
   }
   else {
     (*vm->pagefault_num_ptr)++;
     int victim_page_id = update_lru(vm, page_id, 0);
     if (res.empty_frame != -1) {
-      vm->invert_page_table[res.empty_frame] = vm->invert_page_table[res.empty_frame] & 0x00000000 + page_id;
+      vm->invert_page_table[res.empty_frame] = page_id;
       physical_addr = res.empty_frame * vm->PAGESIZE + page_offset;
     }
     else {//the RAM is full and the requested page is in the disk
@@ -161,10 +178,12 @@ __device__ uchar vm_read(VirtualMemory* vm, u32 addr) {
 
       int target_disk_page_id = search_swap_table(vm, page_id);
       swap_page(vm, target_disk_page_id, victim_page_id, temp_frame);
+      vm->invert_page_table[victim_res.frame_id] = page_id;
       physical_addr = victim_res.frame_id * vm->PAGESIZE + page_offset;
     }
   }
-  return vm->storage[physical_addr];
+  printf("Reading %d from %d\n", vm->buffer[physical_addr], physical_addr);
+  return vm->buffer[physical_addr];
 }
 
 __device__ void vm_write(VirtualMemory* vm, u32 addr, uchar value) {
@@ -176,7 +195,7 @@ __device__ void vm_write(VirtualMemory* vm, u32 addr, uchar value) {
   PageTableQuery res = query_page_table(vm, page_id);
   if (res.frame_id != -1) {
     physical_addr = res.frame_id * vm->PAGESIZE + page_offset;
-    if (vm->lru_head->page_id != res.frame_id) update_lru(vm, page_id, 1);
+    if (vm->lru_head->page_id != page_id) update_lru(vm, page_id, 1);
   }
   else {
     (*vm->pagefault_num_ptr)++; //gotta dereference the pointer first!
