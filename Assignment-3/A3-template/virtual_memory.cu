@@ -235,8 +235,8 @@ __device__ void vm_snapshot(VirtualMemory* vm, uchar* results, int offset,
   int input_size) {
   /* Complete snapshot function togther with vm_read to load elements from data
    * to result buffer */
-  for (int i = offset; i < input_size; i++) {
-    int read_val = vm_read(vm, i);
+  for (int i = 0; i < input_size; i++) {
+    int read_val = vm_read(vm, i+offset);
     // printf("Read val: %d\n", read_val);
     results[i] = read_val;
   }
