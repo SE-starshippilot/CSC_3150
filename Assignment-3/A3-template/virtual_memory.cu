@@ -30,7 +30,7 @@ __device__ void show_lru(VirtualMemory* vm) {
 __device__ int update_lru(VirtualMemory* vm, int page_id, int is_oldpage) {
   /* If lru recorded the page, find it and place it at the top of LRU array */
   printf("Trying to put %d in list.Before update:", page_id);
-  show_lru(vm);
+  // show_lru(vm);
   int ret_val = -1;  // index of page_id in LRU array
   if (is_oldpage) {                  // save some time. no need to search LRU array if it is a new page
     for (LRUNode* i = vm->lru_head; i != NULL; i = i->next) {
@@ -73,11 +73,9 @@ __device__ int update_lru(VirtualMemory* vm, int page_id, int is_oldpage) {
   return ret_val;
 }
 
-__device__ PageTableQuery query_page_table(VirtualMemory* vm, int page_id) {
+__device__ TableQuery query_page_table(VirtualMemory* vm, int page_id) {
   /* Get the index of page entry using sequential search. If not found, return 0. (basically just a sequential search) */
-  int empty_frame, frame_id;
-  empty_frame = -1;
-  frame_id = -1;
+  int empty_frame = -1, frame_id = -1;
   for (int idx = 0; idx < vm->PAGE_ENTRIES; idx++) {
     if (vm->invert_page_table[idx] >> 31 == 1 &&        // find first empty frame
       empty_frame == -1) empty_frame = idx;
@@ -85,35 +83,44 @@ __device__ PageTableQuery query_page_table(VirtualMemory* vm, int page_id) {
       vm->invert_page_table[idx] >> 31 == 0) frame_id = idx;
     if (frame_id != -1) break;     // break if the frame is found
   }
-  PageTableQuery query = { .frame_id = frame_id, .empty_frame = empty_frame };
+  TableQuery query = { .frame_id = frame_id, .empty_frame = empty_frame };
   return query;
 }
 
-__device__ int search_swap_table(VirtualMemory* vm, int page_id) {
+__device__ TableQuery query_swap_table(VirtualMemory* vm, int page_id) {
+  int empty_disk_frame = -1, frame_id = -1; //
   for (int i = 0; i < vm->SWAP_TABLE_SIZE; i++) {
-    if (vm->swap_table[i] == page_id) return i;
+    if (vm->swap_table[i] == page_id) frame_id = i; // find the page in swap table
+    if (vm->swap_table[i] == -1 && empty_disk_frame == -1) empty_disk_frame = i; // find the first empty position
+    if (frame_id != -1) break;
   }
-  return -1;
+  TableQuery query = { .frame_id = frame_id, .empty_frame = empty_disk_frame };
+  return query;
 }
 
-__device__ void swap_page(VirtualMemory* vm, int disk_page_id, int ram_page, uchar temp[]) {
-  if (disk_page_id == -1) {
-    // Nothing from disk->ram, allocate a place in disk, update the swap table.
-    for (int i = 0; i < vm->SWAP_TABLE_SIZE; i++) {
-      if (vm->swap_table[i] == -1) {
-        disk_page_id = i;
-        vm->swap_table[i] = ram_page;
-        break;
-      }
-    }
+__device__ void swap_page(VirtualMemory* vm, TableQuery swap_ram_info, TableQuery swap_disk_info) {
+  uchar buffer[32];
+  int swap_ram_base_addr = swap_ram_info.frame_id * vm->PAGESIZE;
+  int swap_disk_base_addr;
+  printf("Swapping in ram frame %d starting at %d\t", swap_ram_info.frame_id, swap_ram_info.frame_id * vm->PAGESIZE);
+  for (int i = 0; i < vm->PAGESIZE; i++){
+    buffer[i] = vm->buffer[swap_ram_base_addr+ i]; // ram -> buffer
+    printf("%d in buffer[%d]\n", buffer[i], i);
   }
-  else {
-    // The requested page is stored in disk. Perform disk->ram.
-    for (int i = 0; i < vm->PAGESIZE; i++) {
-      vm->storage[disk_page_id * vm->PAGESIZE + i] = vm->buffer[vm->PAGESIZE * ram_page + i];
+  if (swap_disk_info.frame_id != -1) {
+    swap_disk_base_addr = swap_disk_info.frame_id * vm->PAGESIZE;
+    printf("Swapping out disk frame %d starting at %d\n", swap_disk_info.frame_id, swap_disk_info.frame_id * vm->PAGESIZE);
+    for (int i=0; i < vm->PAGESIZE; i++) {
+      vm->buffer[swap_ram_base_addr + i] = vm->storage[swap_disk_base_addr + i];// disk -> ram
+      printf("%d in ram[%d]\n", vm->buffer[swap_ram_base_addr + i], swap_ram_base_addr + i);
     }
+  } else{
+    swap_disk_base_addr = swap_disk_info.empty_frame * vm->PAGESIZE;
   }
-  for (int i = 0; i < vm->PAGESIZE; i++) vm->storage[disk_page_id * vm->PAGESIZE + i] = temp[i];
+  for (int i = 0; i < vm->PAGESIZE; i++) {
+    vm->storage[swap_disk_base_addr + i] = buffer[i]; //buffer->disk
+    printf("%d in disk[%d]\n", vm->storage[swap_disk_base_addr + i], swap_disk_base_addr + i);
+  }
 }
 
 __device__ void vm_init(VirtualMemory* vm, uchar* buffer, uchar* storage,
@@ -151,7 +158,7 @@ __device__ uchar vm_read(VirtualMemory* vm, u32 addr) {
   int page_offset = addr % vm->PAGESIZE;
   int physical_addr;
   printf("[Read] VA: %d Pid:%d Poff:%d ", addr, page_id, page_offset);
-  PageTableQuery res = query_page_table(vm, page_id);
+  TableQuery res = query_page_table(vm, page_id);
   if (res.frame_id != -1) {
     physical_addr = res.frame_id * vm->PAGESIZE + page_offset;
     if (vm->lru_head->page_id != page_id) update_lru(vm, page_id, 1);//get the least recently used page as victim
@@ -168,20 +175,15 @@ __device__ uchar vm_read(VirtualMemory* vm, u32 addr) {
       physical_addr = res.empty_frame * vm->PAGESIZE + page_offset;
     }
     else {//the RAM is full and the requested page is in the disk
-      printf("Victim frame:%d", victim_page_id);
-      uchar temp_frame[32];
-      PageTableQuery victim_res = query_page_table(vm, victim_page_id);
+      printf("Victim page:%d", victim_page_id);
+      TableQuery victim_res = query_page_table(vm, victim_page_id);
       printf("Found victim on frame:%d", victim_res.frame_id);
       assert(victim_res.frame_id != -1);
-      for (int i = 0; i < vm->PAGESIZE; i++) { // transfer the frame to the buffer
-        int _physical_addr = victim_res.frame_id * vm->PAGESIZE + i;
-        temp_frame[i] = vm->buffer[_physical_addr];
-      }
-
-      int target_disk_frame_id = search_swap_table(vm, page_id);
-      printf("Found target page on disk frame:%d", target_disk_frame_id);
-      swap_page(vm, target_disk_frame_id, victim_page_id, temp_frame);
+      TableQuery disk_res = query_swap_table(vm, page_id); // disk_res.frame_id indicates the frame on disk
       vm->invert_page_table[victim_res.frame_id] = page_id;
+      if (disk_res.frame_id != -1) vm->swap_table[disk_res.frame_id] = victim_page_id; 
+      else vm->swap_table[disk_res.empty_frame] = victim_page_id;// if the page is not in disk, put the victim page in a newly allocated place
+      swap_page(vm, victim_res, disk_res);
       printf("Fid: %d ", victim_res.frame_id);
       physical_addr = victim_res.frame_id * vm->PAGESIZE + page_offset;
     }
@@ -196,7 +198,7 @@ __device__ void vm_write(VirtualMemory* vm, u32 addr, uchar value) {
   int page_offset = addr % vm->PAGESIZE;
   int physical_addr;
   printf("[Write]Val: %d VA: %d Pid:%d Poff:%d ", value, addr, page_id, page_offset);
-  PageTableQuery res = query_page_table(vm, page_id);
+  TableQuery res = query_page_table(vm, page_id);
   if (res.frame_id != -1) {
     physical_addr = res.frame_id * vm->PAGESIZE + page_offset;
     if (vm->lru_head->page_id != page_id) update_lru(vm, page_id, 1);
@@ -212,17 +214,15 @@ __device__ void vm_write(VirtualMemory* vm, u32 addr, uchar value) {
       physical_addr = res.empty_frame * vm->PAGESIZE + page_offset;
     }
     else {                      //no more vacant space in the RAM, requires swapping
-      uchar temp_frame[32];
-      PageTableQuery victim_res = query_page_table(vm, victim_page_id);
+      printf("Victim page:%d", victim_page_id);
+      TableQuery victim_res = query_page_table(vm, victim_page_id);
+      printf("Found victim on frame:%d", victim_res.frame_id);
       assert(victim_res.frame_id != -1);
-      for (int i = 0; i < vm->PAGESIZE; i++) { // transfer the frame to the buffer
-        int _physical_addr = victim_res.frame_id * vm->PAGESIZE + i;
-        temp_frame[i] = vm->buffer[_physical_addr];
-      }
-
-      int target_disk_frame_id = search_swap_table(vm, page_id);
-      swap_page(vm, target_disk_frame_id, victim_page_id, temp_frame);
+      TableQuery disk_res = query_swap_table(vm, page_id); // disk_res.frame_id indicates the frame on disk
       vm->invert_page_table[victim_res.frame_id] = page_id;
+      if (disk_res.frame_id != -1) vm->swap_table[disk_res.frame_id] = victim_page_id; 
+      else vm->swap_table[disk_res.empty_frame] = victim_page_id;// if the page is not in disk, put the victim page in a newly allocated place
+      swap_page(vm, victim_res, disk_res);
       printf("Fid: %d ", victim_res.frame_id);
       physical_addr = victim_res.frame_id * vm->PAGESIZE + page_offset;
     }
