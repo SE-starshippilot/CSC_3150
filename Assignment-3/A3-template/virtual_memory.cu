@@ -7,7 +7,8 @@
 __device__ void init_invert_page_table(VirtualMemory* vm) {
   for (int i = 0; i < vm->PAGE_ENTRIES; i++) {
     vm->invert_page_table[i] = 0x80000000; // invalid := MSB is 1
-    // vm->invert_page_table[i + vm->PAGE_ENTRIES] = 0xffffffff;  // Take the second 1K space as the LRU list 
+    // vm->invert_page_table[i + vm->PAGE_ENTRIES] = 0xffffffff;  // Take the second 1K space to record frame number 
+    // vm->invert_page_table[i+ 2*vm->PAGE_ENTRIES] = 0xffffffff; // Take the third 1K space as the LRU list
   }
 }
 
@@ -16,10 +17,15 @@ __device__ void init_swap_table(VirtualMemory* vm) {
     vm->swap_table[i] = -1; // invalid :-1
   }
 }
-
+__device__ void show_lru(VirtualMemory* vm){
+  for(struct LRUNode* _tmp = vm->lru_head; _tmp!=NULL; _tmp=_tmp->next){
+    printf("%d->", _tmp->page_id);
+  }
+}
 __device__ int update_lru(VirtualMemory* vm, int page_id, int is_oldpage) {
   /* If lru recorded the page, find it and place it at the top of LRU array */
   int ret_val = -1;  // index of page_id in LRU array
+  show_lru(vm);
   if (is_oldpage) {                  // save some time. no need to search LRU array if it is a new page
     for (LRUNode* i = vm->lru_head; i != NULL; i = i->next) {
       if (i->page_id == page_id) {
@@ -39,7 +45,6 @@ __device__ int update_lru(VirtualMemory* vm, int page_id, int is_oldpage) {
     _node->prev = NULL;
     if (vm->lru_size==0)vm->lru_tail = _node;
     else vm->lru_head->prev = _node;
-    _node->next = vm->lru_head;
     vm->lru_head = _node;
     vm->lru_size++;
     if (vm->lru_size > vm->PAGE_ENTRIES) {
@@ -51,7 +56,6 @@ __device__ int update_lru(VirtualMemory* vm, int page_id, int is_oldpage) {
       free(del_node);
       vm->lru_size--;
     }
-    vm->lru_head->page_id = page_id;
   }
   return ret_val;
 }
@@ -66,7 +70,7 @@ __device__ PageTableQuery query_page_table(VirtualMemory* vm, int page_id) {
       empty_frame == -1) empty_frame = idx;
     if (vm->invert_page_table[idx] == page_id &&        // find the frame of page_id
       vm->invert_page_table[idx] >> 31 == 0) frame_id = idx;
-    if (empty_frame != -1 && frame_id != -1) break;     // break if both are found
+    if (frame_id != -1) break;     // break if the frame is found
   }
   PageTableQuery query = { .frame_id = frame_id, .empty_frame = empty_frame };
   return query;
@@ -178,7 +182,7 @@ __device__ void vm_write(VirtualMemory* vm, u32 addr, uchar value) {
     (*vm->pagefault_num_ptr)++; //gotta dereference the pointer first!
     int victim_page_id = update_lru(vm, page_id, 0);//if it's not in page table, it must not be in LRU. pick the victim
     if (res.empty_frame != -1) { //there are still vacant space in the RAM
-      vm->invert_page_table[res.empty_frame] = vm->invert_page_table[res.empty_frame] & 0x00000000 + page_id; //update inverted page table, SET valid bit
+      vm->invert_page_table[res.empty_frame] = page_id; //update inverted page table, SET valid bit
       physical_addr = res.empty_frame * vm->PAGESIZE + page_offset;
     }
     else {                      //no more vacant space in the RAM, requires swapping
@@ -192,6 +196,7 @@ __device__ void vm_write(VirtualMemory* vm, u32 addr, uchar value) {
 
       int target_disk_page_id = search_swap_table(vm, page_id);
       swap_page(vm, target_disk_page_id, victim_page_id, temp_frame);
+      vm->invert_page_table[victim_res.frame_id] = page_id;
       physical_addr = victim_page_id * vm->PAGESIZE + page_offset;
     }
   }
