@@ -5,7 +5,6 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
-
 #define DATAFILE "./data.bin"
 #define OUTFILE "./snapshot.bin"
 
@@ -20,6 +19,7 @@
 
 //// count the pagefault times
 __device__ __managed__ int pagefault_num = 0;
+__device__ __managed__ int total_pagefault = 0;
 
 // data input and output
 __device__ __managed__ uchar results[STORAGE_SIZE];
@@ -32,34 +32,56 @@ __device__ __managed__ uchar storage[STORAGE_SIZE];
 extern __shared__ u32 pt[];
 // // swap table
 // extern __shared__ int st[];
-
-__device__ void user_program(VirtualMemory *vm, uchar *input, uchar *results,
-                             int input_size);
+__device__ void user_program(VirtualMemory* vm, uchar* input, uchar* results,
+  int input_size);
 
 __global__ void mykernel(int input_size) {
 
   // memory allocation for virtual_memory
   // take shared memory as physical memory
   __shared__ uchar data[PHYSICAL_MEM_SIZE];
-
   VirtualMemory vm;
-  vm_init(&vm, data, storage, pt, &pagefault_num, PAGE_SIZE,
-          INVERT_PAGE_TABLE_SIZE, STORAGE_SIZE / PAGE_SIZE,PHYSICAL_MEM_SIZE, STORAGE_SIZE,
-          PHYSICAL_MEM_SIZE / PAGE_SIZE);
+  if (threadIdx.x == 0) {
+    vm_init(&vm, data, storage, pt, &pagefault_num, PAGE_SIZE,
+      INVERT_PAGE_TABLE_SIZE, STORAGE_SIZE / PAGE_SIZE, PHYSICAL_MEM_SIZE, STORAGE_SIZE,
+      PHYSICAL_MEM_SIZE / PAGE_SIZE);
+    user_program(&vm, input, results, input_size);
+  }
+  __syncthreads();
+  if (threadIdx.x == 1) {
+    vm_init(&vm, data, storage, pt, &pagefault_num, PAGE_SIZE,
+      INVERT_PAGE_TABLE_SIZE, STORAGE_SIZE / PAGE_SIZE, PHYSICAL_MEM_SIZE, STORAGE_SIZE,
+      PHYSICAL_MEM_SIZE / PAGE_SIZE);
+    user_program(&vm, input, results, input_size);
+  }
+  __syncthreads();
+  if (threadIdx.x == 2) {
+    vm_init(&vm, data, storage, pt, &pagefault_num, PAGE_SIZE,
+      INVERT_PAGE_TABLE_SIZE, STORAGE_SIZE / PAGE_SIZE, PHYSICAL_MEM_SIZE, STORAGE_SIZE,
+      PHYSICAL_MEM_SIZE / PAGE_SIZE);
+    user_program(&vm, input, results, input_size);
+  }
+  __syncthreads();
+  if (threadIdx.x == 3) {
+    vm_init(&vm, data, storage, pt, &pagefault_num, PAGE_SIZE,
+      INVERT_PAGE_TABLE_SIZE, STORAGE_SIZE / PAGE_SIZE, PHYSICAL_MEM_SIZE, STORAGE_SIZE,
+      PHYSICAL_MEM_SIZE / PAGE_SIZE);
+    user_program(&vm, input, results, input_size);
+  }
+  __syncthreads();
 
   // user program the access pattern for testing paging
-  user_program(&vm, input, results, input_size);
 }
 
-__host__ void write_binaryFile(char *fileName, void *buffer, int bufferSize) {
-  FILE *fp;
+__host__ void write_binaryFile(char* fileName, void* buffer, int bufferSize) {
+  FILE* fp;
   fp = fopen(fileName, "wb");
   fwrite(buffer, 1, bufferSize, fp);
   fclose(fp);
 }
 
-__host__ int load_binaryFile(char *fileName, void *buffer, int bufferSize) {
-  FILE *fp;
+__host__ int load_binaryFile(char* fileName, void* buffer, int bufferSize) {
+  FILE* fp;
 
   fp = fopen(fileName, "rb");
   if (!fp) {
@@ -93,12 +115,12 @@ int main() {
   /* Launch kernel function in GPU, with single thread
   and dynamically allocate INVERT_PAGE_TABLE_SIZE bytes of share memory,
   which is used for variables declared as "extern __shared__" */
-  mykernel<<<1, 1, INVERT_PAGE_TABLE_SIZE>>>(input_size);
+  mykernel << <1, 4, INVERT_PAGE_TABLE_SIZE >> > (input_size);
 
   cudaStatus = cudaGetLastError();
   if (cudaStatus != cudaSuccess) {
     fprintf(stderr, "mykernel launch failed: %s\n",
-            cudaGetErrorString(cudaStatus));
+      cudaGetErrorString(cudaStatus));
     return 0;
   }
 

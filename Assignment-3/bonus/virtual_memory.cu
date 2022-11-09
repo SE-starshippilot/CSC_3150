@@ -17,20 +17,10 @@ __device__ void init_swap_table(VirtualMemory* vm) {
     vm->swap_table[i] = -1; // invalid :-1
   }
 }
-__device__ void show_lru(VirtualMemory* vm) {
-  // int size = 4;
-  struct LRUNode* _tmp = vm->lru_head;
-  while (_tmp != NULL) {
-    printf("%d->", _tmp->page_id);
-    _tmp = _tmp->next;
-  }
-  printf("\n");
-}
 
 __device__ int update_lru(VirtualMemory* vm, int page_id, int is_oldpage) {
   /* If lru recorded the page, find it and place it at the top of LRU array */
   printf("Trying to put %d in list.Before update:", page_id);
-  // show_lru(vm);
   int ret_val = -1;  // index of page_id in LRU array
   if (is_oldpage) {                  // save some time. no need to search LRU array if it is a new page
     for (LRUNode* i = vm->lru_head; i != NULL; i = i->next) {
@@ -60,12 +50,10 @@ __device__ int update_lru(VirtualMemory* vm, int page_id, int is_oldpage) {
     vm->lru_size++;
     printf("Current LRU size:%d", vm->lru_size);
     if (vm->lru_size > vm->PAGE_ENTRIES) {
-      printf("Current tail, page_id is %d, prev is %p, next is %p\n", vm->lru_tail->page_id, vm->lru_tail->prev, vm->lru_tail->next);
       ret_val = vm->lru_tail->page_id;
       vm->lru_tail = vm->lru_tail->prev;
       vm->lru_tail->next = NULL;
       vm->lru_size--;
-      printf("After update, tail page_id is %d, prev is %p, next is %p\n", vm->lru_tail->page_id, vm->lru_tail->prev, vm->lru_tail->next);
     }
   }
   // printf("After update:");
@@ -157,7 +145,7 @@ __device__ uchar vm_read(VirtualMemory* vm, u32 addr) {
   int page_id = addr / vm->PAGESIZE;
   int page_offset = addr % vm->PAGESIZE;
   int physical_addr;
-  printf("[Read] VA: %d Pid:%d Poff:%d ", addr, page_id, page_offset);
+  printf("[Thread %d Read] VA: %d Pid:%d Poff:%d ",(int) threadIdx.x, addr, page_id, page_offset);
   TableQuery res = query_page_table(vm, page_id);
   if (res.frame_id != -1) {
     physical_addr = res.frame_id * vm->PAGESIZE + page_offset;
@@ -197,7 +185,7 @@ __device__ void vm_write(VirtualMemory* vm, u32 addr, uchar value) {
   int page_id = addr / vm->PAGESIZE;
   int page_offset = addr % vm->PAGESIZE;
   int physical_addr;
-  printf("[Write]Val: %d VA: %d Pid:%d Poff:%d ", value, addr, page_id, page_offset);
+  printf("[Thread %d Write]Val: %d VA: %d Pid:%d Poff:%d ",(int) threadIdx.x, value, addr, page_id, page_offset);
   TableQuery res = query_page_table(vm, page_id);
   if (res.frame_id != -1) {
     physical_addr = res.frame_id * vm->PAGESIZE + page_offset;
