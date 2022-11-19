@@ -27,6 +27,10 @@ struct FileSystem {
 	int FILE_BASE_ADDRESS;
 };
 
+struct FCBQuery{
+	int FCB_index;
+	int empty_index;
+};
 
 __device__ void fs_init(FileSystem *fs, uchar *volume, int SUPERBLOCK_SIZE,
 	int FCB_SIZE, int FCB_ENTRIES, int VOLUME_SIZE,
