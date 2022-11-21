@@ -1,5 +1,5 @@
-#ifndef VIRTUAL_MEMORY_H
-#define VIRTUAL_MEMORY_H
+#ifndef FILE_SYSTEM_H
+#define FILE_SYSTEM_H
 
 #include <cuda.h>
 #include <cuda_runtime.h>
