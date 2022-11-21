@@ -153,17 +153,44 @@ __device__ void vcb_set(FileSystem* fs, u32 fp, int val) {
   u32 file_start_addr = fs->volume[fs->FILE_BASE_ADDRESS + file_start_block * fs->STORAGE_BLOCK_SIZE];
   int file_end_block = addr2block(fs, file_start_addr + file_size);
   int block_start_byte = file_start_block / 8, block_end_byte = file_end_block / 8, block_start_offset = file_start_block % 8, block_end_offset = file_end_block % 8;
-  if (val==0){
+  if (val == 0) {
     fs->volume[block_start_byte] &= (0xff >> (8 - block_start_offset)) << (8 - block_start_offset);
     fs->volume[block_end_byte] &= 0xff >> (block_end_offset + 1);
-  } else {
+  }
+  else {
     fs->volume[block_start_byte] |= 0xff >> block_start_offset;
     fs->volume[block_end_byte] |= (0xff >> (7 - block_end_offset)) << (7 - block_end_offset);
   }
   for (int i = block_start_byte + 1; i < block_end_byte; i++) fs->volume[i] = val;
 }
 
-__device__ u32 fs_allocate(FileSystem* fs, u32 fp) {
+__device__ u32 fs_compress(FileSystem* fs) {
+  return (u32)0;
+}
+
+__device__ u32 fs_allocate(FileSystem* fs, u32 fp, int block_num) {
+  int largest_start_block = -1, largest_size = -1;
+  for (int i = 0; i < fs->FCB_ENTRIES; i++) {
+    u32 file_fcb_base_addr = fs->SUPERBLOCK_SIZE + i * fs->FCB_SIZE;
+    int file_start_block = read_file_attr(fs, file_fcb_base_addr + STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
+    if (file_start_block > largest_start_block) {
+      largest_start_block = file_start_block;
+      largest_size = read_file_attr(fs, file_fcb_base_addr + SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+    }
+    int largest_end_block = addr2block(fs, fs->FILE_BASE_ADDRESS + largest_start_block * fs->STORAGE_BLOCK_SIZE + largest_size);
+    int new_end_block = largest_end_block + block_num;
+    if (new_end_block / 8 > fs->SUPERBLOCK_SIZE) {
+      largest_end_block = fs_compress(fs);
+      new_end_block = largest_end_block + block_num;
+      if (new_end_block / 8 > fs->SUPERBLOCK_SIZE) {
+        printf("No enough space for allocation!\n");
+        return -1;
+      }
+      else return largest_end_block + 1;
+    }
+    else return largest_end_block + 1;
+  }
+
   return (u32)0;
 }
 
@@ -235,11 +262,12 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
   }
   else if (size > orgn_pos_max_size)
   {
+    int new_block_num = ceil((float)size / fs->STORAGE_BLOCK_SIZE);
     vcb_set(fs, fp, 0);
-    new_file_base_addr = fs_allocate(fs, fp);
+    set_file_attr(fs, file_fcb_base_addr + SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, size); // update file size
+    new_file_base_addr = fs_allocate(fs, fp, new_block_num);
     new_file_start_block = addr2block(fs, new_file_base_addr);
     set_file_attr(fs, file_fcb_base_addr + STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH, new_file_start_block); // update file start block
-    set_file_attr(fs, file_fcb_base_addr + SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, size); // update file size
     vcb_set(fs, fp, 1);
   }
   else {
