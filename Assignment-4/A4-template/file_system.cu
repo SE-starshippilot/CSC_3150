@@ -29,8 +29,8 @@ __device__ void fcb_init(FileSystem* fs) {
 
 __device__ void superblock_init(FileSystem* fs) {
   // Initialize superblock. In my implementation, 0 means free and 1 means used.
-  for (uchar i = 0; i < fs->SUPERBLOCK_SIZE; i++) {
-    fs->volume[i] = 0;
+  for (int i = 0; i < fs->SUPERBLOCK_SIZE; i++) {
+    fs->volume[i] = (uchar) 0x00;
   }
 }
 
@@ -39,6 +39,7 @@ __device__ void fs_init(FileSystem* fs, uchar* volume, int SUPERBLOCK_SIZE,
   int STORAGE_BLOCK_SIZE, int MAX_FILENAME_SIZE,
   int MAX_FILE_NUM, int MAX_FILE_SIZE, int FILE_BASE_ADDRESS)
 {
+  printf("In fs_init\n");
   // init variables
   fs->volume = volume;
 
@@ -102,7 +103,7 @@ __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_
   /* Set file attribute. */
   u32 fcb_attr_addr = fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
   for (int i = attr_length - 1; i >= 0; i--) {
-    fs->volume[fcb_attr_addr + i] = value & 0xFF;
+    fs->volume[fcb_attr_addr + i] = (uchar) value & 0xFF;
     value = value >> 8;
   }
 }
