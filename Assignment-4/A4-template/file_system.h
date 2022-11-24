@@ -14,6 +14,8 @@ typedef uint32_t u32;
 #define LS_S 1
 #define RM 2
 
+#define LS_DR 3 //display rich info ranking using LS_D
+
 struct FileSystem {
 	uchar *volume;
 	int SUPERBLOCK_SIZE;
