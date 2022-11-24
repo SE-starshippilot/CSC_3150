@@ -87,7 +87,7 @@ __device__ char* get_file_attr(FileSystem* fs, u32 fp, int attr_offset) {
 __device__ int get_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length) {
   /* Read file attribute from FCB. */
   u32 fcb_attr_addr = fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
-  printf("[Read Attr from addr %d, length %d]\n", fcb_attr_addr, attr_length);
+  // printf("[Read Attr from addr %d, length %d]\n", fcb_attr_addr, attr_length);
   int result = 0;
   for (int i = 0; i < attr_length; i++) {
     // printf("reading byte %d:\t curr_result:%d\t", i, result);
@@ -116,6 +116,7 @@ __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, char* val
     fs->volume[fcb_attr_addr + filename_byte_idx] = value[filename_byte_idx];
     filename_byte_idx++;
   }
+  fs->volume[fcb_attr_addr + filename_byte_idx] = '\0';
 }
 
 __device__ FCBQuery search_file(FileSystem* fs, char* s) {
@@ -125,7 +126,8 @@ __device__ FCBQuery search_file(FileSystem* fs, char* s) {
   FCBQuery ret_val = { -1, -1 };
   for (u32 i = 0; i < fs->FCB_ENTRIES; i++) {
     if (get_file_attr(fs, i, 0, 1) == FCB_VALID) { // valid bit is set
-      if (is_same_str(s, (char*)fs->volume + fs->SUPERBLOCK_SIZE + i * fs->FCB_SIZE + 1)) {
+      char* file_name = get_file_attr(fs, i, NAME_ATTR_OFFSET);
+      if (is_same_str(s, file_name)) {
         ret_val.FCB_index = i;
       }
     }
@@ -261,6 +263,7 @@ __device__ u32 fs_open(FileSystem* fs, char* s, int op)
   else if (op == G_WRITE) {
     if (query.empty_index == -1) return fs->FCB_ENTRIES; // maximum # of files reached
     else {
+      set_file_attr(fs, query.empty_index, 0, 1, FCB_VALID);
       set_file_attr(fs, query.empty_index, NAME_ATTR_OFFSET, s); // set file name
       set_file_attr(fs, query.empty_index, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, 0); // set file size
       set_file_attr(fs, query.empty_index, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH, gtime); // set create time
@@ -355,7 +358,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       for (int j = 0; j < fs->FCB_ENTRIES; j++) {
         if (get_file_attr(fs, j, 0, 1) == FCB_INVALID) continue;
         int file_modtime = get_file_attr(fs, j, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
-        if (file_modtime > prev_youngest_modtime) continue;
+        if (file_modtime >= prev_youngest_modtime) continue;
         if (file_modtime > curr_youngest_modtime) {
           curr_youngest_modtime = file_modtime;
           curr_file_name = get_file_attr(fs, j, NAME_ATTR_OFFSET);
