@@ -78,8 +78,7 @@ __device__ char* get_file_attr(FileSystem* fs, u32 fp, int attr_offset) {
     file_name_len++;
   }
   file_name_len++;
-  char* file_name = (char*)malloc(file_name_len);
-  memcpy(file_name, fs->volume + fcb_attr_addr, file_name_len);
+  char* file_name = (char*) fs->volume + fcb_attr_addr;
   return file_name;
 }
 
@@ -210,21 +209,21 @@ __device__ int move_file(FileSystem* fs, u32 fp, int new_start_block_idx) {
 
 __device__ int fs_compress(FileSystem* fs) {
   /* Compress volume and retrun the first vacant block's index*/
-  int next_vacant_block_idx = 0, prev_lowset_start_block_idx = 0;
+  int next_vacant_block_idx = 0,  prev_smallest_start_block= 0;
   for (int i = 0; i < gfilenum; i++) {
     int curr_lowset_start_block_idx = 8 * fs->SUPERBLOCK_SIZE;
     int curr_lowest_start_block_fp;
     for (int j = 0; j < fs->FCB_ENTRIES; j++) {
       if (get_file_attr(fs, j, 0, 1) == FCB_INVALID) continue;
-      int file_base_addr = get_file_attr(fs, j, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
-      if (file_base_addr < prev_lowset_start_block_idx) continue;
-      if (file_base_addr < curr_lowset_start_block_idx) {
-        curr_lowset_start_block_idx = file_base_addr;
+      int file_start_block_idx = get_file_attr(fs, j, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
+      if (file_start_block_idx <= prev_smallest_start_block) continue;
+      if (file_start_block_idx < curr_lowset_start_block_idx) {
+        curr_lowset_start_block_idx = file_start_block_idx;
         curr_lowest_start_block_fp = j;
       }
     }
     if (curr_lowset_start_block_idx != next_vacant_block_idx) {
-      prev_lowset_start_block_idx = curr_lowset_start_block_idx;
+      prev_smallest_start_block = curr_lowset_start_block_idx;
       next_vacant_block_idx = move_file(fs, curr_lowest_start_block_fp, next_vacant_block_idx);
     }
   }
@@ -345,14 +344,17 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
     }
     set_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH, new_file_start_block); // update file start block
     vcb_set(fs, fp, 1);
+    new_file_base_addr = get_file_base_addr(fs, fp);
   }
   else {
     set_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, size); // update file size
   }
   // write $size bytes to the new starting position 
   // set_file_attr(fs, fcb_base_addr + SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, size); // set file size
-  for (int i = 0; i < size; i++) // write file content
+  for (int i = 0; i < size; i++){ // write file content
+    if (fp==1006) printf("write %d to %d\n", input[i], new_file_base_addr + i);
     fs->volume[new_file_base_addr + i] = input[i];
+  }
   set_file_attr(fs, fp, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime); // set modify time
   gtime++;
   return 0;
@@ -425,7 +427,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       int curr_file_createtime = get_file_attr(fs, curr_fp, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH);
       int curr_file_startblock = get_file_attr(fs, curr_fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
       int curr_file_endblock = get_file_end_block(fs, curr_fp);
-      printf("File name:%-20s\tFile size:%-10d\tFile starts on block:%-5d\tFile ends on block:%-5d\tTime created:%-5d\tTime modified:%-5d\n", curr_file_name, curr_file_size, curr_file_startblock, curr_file_endblock, curr_file_createtime, curr_file_modtime);
+      printf("#%4d FCB Index:%-4d\tFile name:%-20s\tSize:%-10d\tStarts on block:%-5d\tEnds on block:%-5d\tTime created:%-5d\tTime modified:%-5d\n", i, curr_fp, curr_file_name, curr_file_size, curr_file_startblock, curr_file_endblock, curr_file_createtime, curr_file_modtime);
       prev_smallest_start_block = curr_smallest_start_block;
     }
   }
