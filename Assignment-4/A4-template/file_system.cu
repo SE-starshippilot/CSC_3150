@@ -164,9 +164,7 @@ __device__ void vcb_set(FileSystem* fs, int fp, int val) {
   int file_start_block = get_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
   int file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
   if (file_size == 0) return;
-  u32 file_start_addr = get_file_base_addr(fs, fp);
-  u32 file_end_addr = file_size ? file_start_addr + file_size - 1 : file_start_addr;
-  int file_end_block = get_block_idx(fs, file_end_addr);
+  int file_end_block = get_file_end_block(fs, fp);
   for (int i = file_start_block; i <= file_end_block; i++) {
     int curr_byte = i / 8, curr_offset = 7 - (i % 8);
     if (val) {
