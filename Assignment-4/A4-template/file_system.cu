@@ -39,7 +39,6 @@ __device__ void fs_init(FileSystem* fs, uchar* volume, int SUPERBLOCK_SIZE,
   int STORAGE_BLOCK_SIZE, int MAX_FILENAME_SIZE,
   int MAX_FILE_NUM, int MAX_FILE_SIZE, int FILE_BASE_ADDRESS)
 {
-  printf("In fs_init\n");
   // init variables
   fs->volume = volume;
 
@@ -142,13 +141,13 @@ __device__ FCBQuery search_file(FileSystem* fs, char* s) {
 __device__ u32 get_file_base_addr(FileSystem* fs, u32 fp) {
   /* Given a file pointer, return the base address of the file*/
   u32 file_start_block = get_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
-  printf("file starts at block#%d, which is address %d\n", file_start_block, fs->FILE_BASE_ADDRESS + file_start_block * fs->STORAGE_BLOCK_SIZE);
+  // printf("file starts at block#%d, which is address %d\n", file_start_block, fs->FILE_BASE_ADDRESS + file_start_block * fs->STORAGE_BLOCK_SIZE);
   return fs->FILE_BASE_ADDRESS + file_start_block * fs->STORAGE_BLOCK_SIZE;
 }
 
 __device__ u32 get_block_idx(FileSystem* fs, u32 addr) {
   /* Given an address(in the volume), return the corresponding block ID*/
-  printf("addr=%d;\tbase_addr=%d\t;\tdelta=%d.\n", addr, fs->FILE_BASE_ADDRESS, addr - fs->FILE_BASE_ADDRESS);
+  // printf("addr=%d;\tbase_addr=%d\t;\tdelta=%d.\n", addr, fs->FILE_BASE_ADDRESS, addr - fs->FILE_BASE_ADDRESS);
   return (addr - fs->FILE_BASE_ADDRESS) / fs->STORAGE_BLOCK_SIZE;
 }
 
@@ -157,11 +156,8 @@ __device__ void vcb_set(FileSystem* fs, int fp, int val) {
   int file_start_block = get_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
   int file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
   u32 file_start_addr = get_file_base_addr(fs, fp);
-  printf("file starts at address %d.\n", file_start_addr);
   u32 file_end_addr = file_size ? file_start_addr + file_size - 1 : file_start_addr;
-  printf("file ends at address %d.\n", file_end_addr);
   int file_end_block = get_block_idx(fs, file_end_addr);
-  printf("file starts at block#%d, ends at block#%d.\n", file_start_block, file_end_block);
   for (int i = file_start_block; i <= file_end_block; i++) {
     int curr_byte = i / 8, curr_offset = 7 - (i % 8);
     if (val) {
@@ -270,7 +266,6 @@ __device__ u32 fs_open(FileSystem* fs, char* s, int op)
       set_file_attr(fs, query.empty_index, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime); // set modify time
       gtime++;
       gfilenum++;
-      printf("Currently there are %d files\n", gfilenum);
       return query.empty_index;
     }
   }
@@ -310,8 +305,8 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
   int orgn_pos_max_size = floor((float)orgn_file_size / fs->STORAGE_BLOCK_SIZE) * fs->STORAGE_BLOCK_SIZE; // the maximum size the previous location can hold 
   u32 new_file_base_addr = get_file_base_addr(fs, fp); // set the new file base address to the original one
   u32 new_file_start_block = get_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH); // as well as the new file start block
-  printf("originally file is %d Bytes.\n", orgn_file_size);
-  printf("The original space can store up to %d Bytes of file.\n", orgn_pos_max_size);
+  // printf("originally file is %d Bytes.\n", orgn_file_size);
+  // printf("The original space can store up to %d Bytes of file.\n", orgn_pos_max_size);
   if (size < orgn_file_size) { // If the new size is smaller than the original file, clear VCB and set according to new size
     vcb_set(fs, fp, 0); // clear the VCB bits
     set_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, size); // update file size
@@ -364,11 +359,12 @@ __device__ void fs_gsys(FileSystem* fs, int op)
           curr_file_name = get_file_attr(fs, j, NAME_ATTR_OFFSET);
         }
       }
-      printf("%-20s", curr_file_name);
+      printf("%-20s\n", curr_file_name);
       prev_youngest_modtime = curr_youngest_modtime;
     }
   }
   else if (op == LS_S) {
+    printf("===sort by file size===\n");
     int prev_max_size = fs->MAX_FILE_SIZE, prev_oldest_create_time = -1;
     for (int i = 0; i < gfilenum; i++) {
       int curr_max_size = -1, curr_oldest_create_time = gtime;
@@ -384,7 +380,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
           curr_file_name = get_file_attr(fs, j, NAME_ATTR_OFFSET);
         }
       }
-      printf("%-20s\t %d", curr_file_name, curr_max_size);
+      printf("%-20s\t %d\n", curr_file_name, curr_max_size);
       prev_max_size = curr_max_size;
       prev_oldest_create_time = curr_oldest_create_time;
     }
