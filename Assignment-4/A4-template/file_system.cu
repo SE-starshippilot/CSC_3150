@@ -151,10 +151,19 @@ __device__ u32 get_block_idx(FileSystem* fs, u32 addr) {
   return (addr - fs->FILE_BASE_ADDRESS) / fs->STORAGE_BLOCK_SIZE;
 }
 
+__device__ u32 get_file_end_block(FileSystem* fs, u32 fp) {
+  /* Given a file pointer, return the end block of the file*/
+  u32 file_start_block = get_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
+  u32 file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+  u32 file_block_count = ceil((float)file_size / fs->STORAGE_BLOCK_SIZE);
+  return file_start_block + file_block_count - 1;
+}
+
 __device__ void vcb_set(FileSystem* fs, int fp, int val) {
   /* Set the corresponding VCB bits to 0 */
   int file_start_block = get_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
   int file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+  if (file_size == 0) return;
   u32 file_start_addr = get_file_base_addr(fs, fp);
   u32 file_end_addr = file_size ? file_start_addr + file_size - 1 : file_start_addr;
   int file_end_block = get_block_idx(fs, file_end_addr);
@@ -258,7 +267,7 @@ __device__ u32 fs_open(FileSystem* fs, char* s, int op)
   }
   else if (op == G_WRITE) {
     if (ret_val == -1) {
-      if (query.empty_index == -1){
+      if (query.empty_index == -1) {
         printf("Maximum #file reached.\n");
         ret_val = fs->FCB_ENTRIES;
       }
@@ -276,19 +285,18 @@ __device__ u32 fs_open(FileSystem* fs, char* s, int op)
   }
   else {
     printf("Invalid operation code.\n");
-    ret_val =  fs->FCB_ENTRIES;
+    ret_val = fs->FCB_ENTRIES;
   }
   ret_val <<= 1;
   ret_val += op;
   return ret_val;
-
 }
 
 __device__ void fs_read(FileSystem* fs, uchar* output, u32 size, u32 fp)
 {
   /* Implement read operation here */
   int mode = fp & 1;
-  fp >>=1;
+  fp >>= 1;
   if (fp == fs->FCB_ENTRIES || mode != G_READ) {
     printf("File not found.\n");
     return;
@@ -369,6 +377,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
         if (file_modtime > curr_youngest_modtime) {
           curr_youngest_modtime = file_modtime;
           curr_file_name = get_file_attr(fs, j, NAME_ATTR_OFFSET);
+
         }
       }
       printf("%-20s\n", curr_file_name);
@@ -395,6 +404,31 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       printf("%-20s\t %d\n", curr_file_name, curr_max_size);
       prev_max_size = curr_max_size;
       prev_oldest_create_time = curr_oldest_create_time;
+    }
+  }
+  else if (op == LS_DR) {
+    printf("===sort by start block index===\n");
+    int prev_smallest_start_block = -1;
+    for (int i = 0; i < gfilenum; i++) {
+      int curr_smallest_start_block = fs->SUPERBLOCK_SIZE * 8;
+      int curr_fp;
+      for (int j = 0; j < fs->FCB_ENTRIES; j++) {
+        if (get_file_attr(fs, j, 0, 1) == FCB_INVALID) continue;
+        int file_startblock = get_file_attr(fs, j, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
+        if (file_startblock <= prev_smallest_start_block) continue;
+        if (file_startblock < curr_smallest_start_block) {
+          curr_smallest_start_block = file_startblock;
+          curr_fp = j;
+        }
+      }
+      char* curr_file_name = get_file_attr(fs, curr_fp, NAME_ATTR_OFFSET);
+      int curr_file_modtime = get_file_attr(fs, curr_fp, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
+      int curr_file_size = get_file_attr(fs, curr_fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+      int curr_file_createtime = get_file_attr(fs, curr_fp, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH);
+      int curr_file_startblock = get_file_attr(fs, curr_fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
+      int curr_file_endblock = get_file_end_block(fs, curr_fp);
+      printf("File name:%-20s\tFile size:%-10d\tFile starts on block:%-5d\tFile ends on block:%-5d\tTime created:%-5d\tTime modified:%-5d\n", curr_file_name, curr_file_size, curr_file_startblock, curr_file_endblock, curr_file_createtime, curr_file_modtime);
+      prev_smallest_start_block = curr_smallest_start_block;
     }
   }
   else {
