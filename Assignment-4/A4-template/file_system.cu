@@ -209,9 +209,9 @@ __device__ int fs_compress(FileSystem* fs) {
       if (get_file_attr(fs, j, 0, 1) == FCB_INVALID) continue;
       int file_start_block_idx = get_file_attr(fs, j, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
       if (file_start_block_idx < prev_lowset_start_block_idx) continue;
-      if (file_start_block_idx < curr_lowset_start_block_idx) { 
-        curr_lowset_start_block_idx = file_start_block_idx; 
-        curr_lowest_start_block_fp = j;  
+      if (file_start_block_idx < curr_lowset_start_block_idx) {
+        curr_lowset_start_block_idx = file_start_block_idx;
+        curr_lowest_start_block_fp = j;
       }
     }
     if (curr_lowset_start_block_idx != next_vacant_block_idx) {
@@ -223,9 +223,9 @@ __device__ int fs_compress(FileSystem* fs) {
 }
 
 __device__ u32 fs_allocate(FileSystem* fs, int block_num) {
-  /* Return the first place that can hold $block_num blocks*/
+  /* Return the index of first block that can hold $block_num blocks*/
   /* Use first fit algirthm. First, check if the volume has enough space.*/
-  if (!has_enough_space(fs, block_num)) return -1;
+  if (!has_enough_space(fs, block_num)) return fs->SUPERBLOCK_SIZE * 8;
   /* If there are enough space */
   int count = 0;
   int t_block_idx = 0;
@@ -248,13 +248,14 @@ __device__ u32 fs_allocate(FileSystem* fs, int block_num) {
 __device__ u32 fs_open(FileSystem* fs, char* s, int op)
 {
   /* Implement open operation here */
+
   FCBQuery query = search_file(fs, s);
   if (query.FCB_index != -1) return query.FCB_index;
   if (op == G_READ) {
-    return -1;
+    return fs->FCB_ENTRIES;
   }
   else if (op == G_WRITE) {
-    if (query.empty_index == -1) return -1; // maximum # of files reached
+    if (query.empty_index == -1) return fs->FCB_ENTRIES; // maximum # of files reached
     else {
       set_file_attr(fs, query.empty_index, NAME_ATTR_OFFSET, s); // set file name
       set_file_attr(fs, query.empty_index, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, 0); // set file size
@@ -268,6 +269,7 @@ __device__ u32 fs_open(FileSystem* fs, char* s, int op)
   }
   else {
     printf("Invalid operation code.\n");
+    return fs->FCB_ENTRIES;
   }
 
 }
@@ -275,7 +277,7 @@ __device__ u32 fs_open(FileSystem* fs, char* s, int op)
 __device__ void fs_read(FileSystem* fs, uchar* output, u32 size, u32 fp)
 {
   /* Implement read operation here */
-  if (fp == -1) {
+  if (fp == fs->FCB_ENTRIES) {
     printf("File not found.\n");
     return;
   }
@@ -292,9 +294,10 @@ __device__ void fs_read(FileSystem* fs, uchar* output, u32 size, u32 fp)
 __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
 {
   /* Implement write operation here */
-  if (fp == -1) {
+  /* return 1 means error, 0 means success*/
+  if (fp == fs->FCB_ENTRIES) {
     printf("Invalid fp.\n");
-    return -1;
+    return 1;
   }
   u32 orgn_file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
   int orgn_pos_max_size = floor((float)orgn_file_size / fs->STORAGE_BLOCK_SIZE) * fs->STORAGE_BLOCK_SIZE; // the maximum size the previous location can hold 
@@ -313,6 +316,13 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
     vcb_set(fs, fp, 0);
     set_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, size); // update file size
     new_file_start_block = fs_allocate(fs, new_block_num);
+    if (new_file_start_block == fs->SUPERBLOCK_SIZE * 8) {
+      printf("No enough space.\n");
+      // roll back
+      set_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, orgn_file_size);
+      vcb_set(fs, fp, 1);
+      return 1;
+    }
     set_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH, new_file_start_block); // update file start block
     vcb_set(fs, fp, 1);
   }
@@ -325,6 +335,7 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
     fs->volume[new_file_base_addr + i] = input[i];
   set_file_attr(fs, fp, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime); // set modify time
   gtime++;
+  return 0;
 }
 
 __device__ void fs_gsys(FileSystem* fs, int op)
