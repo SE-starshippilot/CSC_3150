@@ -252,34 +252,44 @@ __device__ u32 fs_open(FileSystem* fs, char* s, int op)
   /* Implement open operation here */
 
   FCBQuery query = search_file(fs, s);
-  if (query.FCB_index != -1) return query.FCB_index;
+  int ret_val = query.FCB_index;
   if (op == G_READ) {
-    return fs->FCB_ENTRIES;
+    if (ret_val == -1) ret_val = fs->FCB_ENTRIES;
   }
   else if (op == G_WRITE) {
-    if (query.empty_index == -1) return fs->FCB_ENTRIES; // maximum # of files reached
-    else {
-      set_file_attr(fs, query.empty_index, 0, 1, FCB_VALID);
-      set_file_attr(fs, query.empty_index, NAME_ATTR_OFFSET, s); // set file name
-      set_file_attr(fs, query.empty_index, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, 0); // set file size
-      set_file_attr(fs, query.empty_index, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH, gtime); // set create time
-      set_file_attr(fs, query.empty_index, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime); // set modify time
-      gtime++;
-      gfilenum++;
-      return query.empty_index;
+    if (ret_val == -1) {
+      if (query.empty_index == -1){
+        printf("Maximum #file reached.\n");
+        ret_val = fs->FCB_ENTRIES;
+      }
+      else {
+        ret_val = query.empty_index;
+        set_file_attr(fs, query.empty_index, 0, 1, FCB_VALID);
+        set_file_attr(fs, query.empty_index, NAME_ATTR_OFFSET, s); // set file name
+        set_file_attr(fs, query.empty_index, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, 0); // set file size
+        set_file_attr(fs, query.empty_index, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH, gtime); // set create time
+        set_file_attr(fs, query.empty_index, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime); // set modify time
+        gtime++;
+        gfilenum++;
+      }
     }
   }
   else {
     printf("Invalid operation code.\n");
-    return fs->FCB_ENTRIES;
+    ret_val =  fs->FCB_ENTRIES;
   }
+  ret_val <<= 1;
+  ret_val += op;
+  return ret_val;
 
 }
 
 __device__ void fs_read(FileSystem* fs, uchar* output, u32 size, u32 fp)
 {
   /* Implement read operation here */
-  if (fp == fs->FCB_ENTRIES) {
+  int mode = fp & 1;
+  fp >>=1;
+  if (fp == fs->FCB_ENTRIES || mode != G_READ) {
     printf("File not found.\n");
     return;
   }
@@ -297,7 +307,9 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
 {
   /* Implement write operation here */
   /* return 1 means error, 0 means success*/
-  if (fp == fs->FCB_ENTRIES) {
+  int mode = fp & 1;
+  fp >>= 1;
+  if (fp == fs->FCB_ENTRIES || mode != G_WRITE) {
     printf("Invalid fp.\n");
     return 1;
   }
