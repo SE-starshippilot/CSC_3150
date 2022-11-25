@@ -203,14 +203,14 @@ __device__ int move_file(FileSystem* fs, u32 fp, int new_start_block_idx) {
   for (int i = 0; i < file_size; i++) {
     fs->volume[new_file_base_addr + i] = fs->volume[old_file_base_addr + i];
   }
-  int file_block_size = ceil((float)file_size / fs->STORAGE_BLOCK_SIZE);
-  return new_start_block_idx + file_block_size;
+  int file_end_block = get_file_end_block(fs, fp);
+  return file_end_block + 1;
 }
 
 __device__ int fs_compress(FileSystem* fs) {
   /* Compress volume and retrun the first vacant block's index*/
   int next_vacant_block_idx = 0,  prev_smallest_start_block= 0;
-  for (int i = 0; i < gfilenum; i++) {
+  for (int i = 0; i < gfilenum - 1; i++) { // we need to exclude the new file created
     int curr_lowset_start_block_idx = 8 * fs->SUPERBLOCK_SIZE;
     int curr_lowest_start_block_fp;
     for (int j = 0; j < fs->FCB_ENTRIES; j++) {
@@ -222,10 +222,8 @@ __device__ int fs_compress(FileSystem* fs) {
         curr_lowest_start_block_fp = j;
       }
     }
-    if (curr_lowset_start_block_idx != next_vacant_block_idx) {
-      prev_smallest_start_block = curr_lowset_start_block_idx;
-      next_vacant_block_idx = move_file(fs, curr_lowest_start_block_fp, next_vacant_block_idx);
-    }
+    prev_smallest_start_block = curr_lowset_start_block_idx;
+    next_vacant_block_idx = move_file(fs, curr_lowest_start_block_fp, next_vacant_block_idx);
   }
   return next_vacant_block_idx;
 }
@@ -352,7 +350,6 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
   // write $size bytes to the new starting position 
   // set_file_attr(fs, fcb_base_addr + SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, size); // set file size
   for (int i = 0; i < size; i++){ // write file content
-    if (fp==1006) printf("write %d to %d\n", input[i], new_file_base_addr + i);
     fs->volume[new_file_base_addr + i] = input[i];
   }
   set_file_attr(fs, fp, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime); // set modify time
