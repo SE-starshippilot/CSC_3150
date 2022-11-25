@@ -11,10 +11,6 @@
 #define STARTBLK_ATTR_OFFSET 6
 #define SIZE_ATTR_OFFSET 8
 #define NAME_ATTR_OFFSET 12
-#define CREATE_TIME_ATTR_LENGTH 2
-#define MODIFY_TIME_ATTR_LENGTH 2
-#define STARTBLK_ATTR_LENGTH 2
-#define SIZE_ATTR_LENGTH 4
 #define FCB_VALID 0b10000000
 #define FCB_INVALID 0b00000000
 
@@ -23,7 +19,7 @@ __device__ __managed__ int gfilenum = 0;
 
 __device__ void fcb_init(FileSystem* fs) {
   for (u32 i = 0; i < fs->FCB_ENTRIES; i++) {
-    set_file_attr(fs, i, 0, 1, FCB_INVALID);// MSB in the first byte of FCB is valid bit. 0 indicates invalid.
+    set_file_attr(fs, i, 0, FCB_INVALID);// MSB in the first byte of FCB is valid bit. 0 indicates invalid.
   }
 }
 
@@ -71,50 +67,36 @@ __device__ int is_same_str(char* str1, char* str2) {
   else return 0;
 }
 
+template <typename T>
+__device__ T get_file_attr(FileSystem* fs, u32 fp, int attr_offset) {
+  /* Read file attribute from FCB. */
+  T* ret_ptr = (T*)fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
+  return *ret_ptr;
+}
+
 __device__ char* get_file_attr(FileSystem* fs, u32 fp, int attr_offset) {
   u32 fcb_attr_addr = fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
-  int file_name_len = 0;
-  while (fs->volume[fcb_attr_addr + file_name_len] != '\0') {
-    file_name_len++;
-  }
-  file_name_len++;
   char* file_name = (char*) fs->volume + fcb_attr_addr;
   return file_name;
 }
 
-__device__ int get_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length) {
-  /* Read file attribute from FCB. */
-  u32 fcb_attr_addr = fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
-  // printf("[Read Attr from addr %d, length %d]\n", fcb_attr_addr, attr_length);
-  int result = 0;
-  for (int i = 0; i < attr_length; i++) {
-    // printf("reading byte %d:\t curr_result:%d\t", i, result);
-    result = result << 8;
-    // printf("result << 8: %d\t curr_byte: %d\t", result, (int)fs->volume[fcb_attr_addr + i]);
-    result += (int)fs->volume[fcb_attr_addr + i];
-    // printf("result after shifting: %d\n", result);
-  }
-  return result;
-}
-
-__device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length, int value) {
+template <typename T>
+__device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, T value) {
   /* Set file attribute. */
-  u32 fcb_attr_addr = fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
-  for (int i = attr_length - 1; i >= 0; i--) {
-    fs->volume[fcb_attr_addr + i] = (uchar)value & 0xFF;
-    value = value >> 8;
-  }
+  T* fcb_attr = (T*)fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
+  *fcb_attr = value;
 }
-
 __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, char* value) {
   /* Set file attribute. This reloaded function is for setting file name only. */
   int filename_byte_idx = 0;
-  int fcb_attr_addr = fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
-  while (value[filename_byte_idx] != '\0' && filename_byte_idx < fs->MAX_FILENAME_SIZE) {
-    fs->volume[fcb_attr_addr + filename_byte_idx] = value[filename_byte_idx];
+  uchar* fcb_attr = (uchar*)fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
+  while (*value != '\0' && filename_byte_idx < fs->MAX_FILENAME_SIZE) {
+    *fcb_attr = *value;
+    fcb_attr++;
+    value++;
     filename_byte_idx++;
   }
-  fs->volume[fcb_attr_addr + filename_byte_idx] = '\0';
+  *fcb_attr = '\0';
 }
 
 __device__ FCBQuery search_file(FileSystem* fs, char* s) {
@@ -123,10 +105,11 @@ __device__ FCBQuery search_file(FileSystem* fs, char* s) {
    */
   FCBQuery ret_val = { -1, -1 };
   for (u32 i = 0; i < fs->FCB_ENTRIES; i++) {
-    if (get_file_attr(fs, i, 0, 1) == FCB_VALID) { // valid bit is set
+    if (get_file_attr<uchar>(fs, i, 0) == FCB_VALID) { // valid bit is set
       char* file_name = get_file_attr(fs, i, NAME_ATTR_OFFSET);
       if (is_same_str(s, file_name)) {
         ret_val.FCB_index = i;
+        return ret_val;
       }
     }
     else if (ret_val.empty_index == -1) {
@@ -139,7 +122,7 @@ __device__ FCBQuery search_file(FileSystem* fs, char* s) {
 
 __device__ u32 get_file_base_addr(FileSystem* fs, u32 fp) {
   /* Given a file pointer, return the base address of the file*/
-  u32 file_start_block = get_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
+  int file_start_block = (int)get_file_attr<short>(fs, fp, STARTBLK_ATTR_OFFSET);
   // printf("file starts at block#%d, which is address %d\n", file_start_block, fs->FILE_BASE_ADDRESS + file_start_block * fs->STORAGE_BLOCK_SIZE);
   return fs->FILE_BASE_ADDRESS + file_start_block * fs->STORAGE_BLOCK_SIZE;
 }
@@ -150,19 +133,19 @@ __device__ u32 get_block_idx(FileSystem* fs, u32 addr) {
   return (addr - fs->FILE_BASE_ADDRESS) / fs->STORAGE_BLOCK_SIZE;
 }
 
-__device__ u32 get_file_end_block(FileSystem* fs, u32 fp) {
+__device__ short get_file_end_block(FileSystem* fs, u32 fp) {
   /* Given a file pointer, return the end block of the file*/
-  u32 file_start_block = get_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
-  u32 file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
-  u32 file_block_count = ceil((float)file_size / fs->STORAGE_BLOCK_SIZE);
-  return file_start_block + file_block_count - 1;
+  u32 file_start_block = (u32)get_file_attr<short>(fs, fp, STARTBLK_ATTR_OFFSET);
+  u32 file_size = (u32)get_file_attr<int>(fs, fp, SIZE_ATTR_OFFSET);
+  u32 file_block_count = ceil((float)(file_size) / fs->STORAGE_BLOCK_SIZE);
+  return (short)file_start_block + file_block_count - 1;
 }
 
 __device__ void vcb_set(FileSystem* fs, int fp, int val) {
   /* Set the corresponding VCB bits to 0 */
-  int file_start_block = get_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
-  int file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+  int file_size = get_file_attr<int>(fs, fp, SIZE_ATTR_OFFSET);
   if (file_size == 0) return;
+  short file_start_block = get_file_attr<short>(fs, fp, STARTBLK_ATTR_OFFSET);
   int file_end_block = get_file_end_block(fs, fp);
   for (int i = file_start_block; i <= file_end_block; i++) {
     int curr_byte = i / 8, curr_offset = 7 - (i % 8);
@@ -197,9 +180,9 @@ __device__ int move_file(FileSystem* fs, u32 fp, int new_start_block_idx) {
   u32 old_file_base_addr = get_file_base_addr(fs, fp);
   u32 new_file_base_addr = fs->FILE_BASE_ADDRESS + new_start_block_idx * fs->STORAGE_BLOCK_SIZE;
   vcb_set(fs, fp, 0); // first, clear the original VCB bits
-  set_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH, new_start_block_idx);
+  set_file_attr<short>(fs, fp, STARTBLK_ATTR_OFFSET, new_start_block_idx);
   vcb_set(fs, fp, 1); // then, set the new VCB bits
-  int file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+  int file_size = get_file_attr<int>(fs, fp, SIZE_ATTR_OFFSET);
   for (int i = 0; i < file_size; i++) {
     fs->volume[new_file_base_addr + i] = fs->volume[old_file_base_addr + i];
   }
@@ -209,13 +192,13 @@ __device__ int move_file(FileSystem* fs, u32 fp, int new_start_block_idx) {
 
 __device__ int fs_compress(FileSystem* fs) {
   /* Compress volume and retrun the first vacant block's index*/
-  int next_vacant_block_idx = 0,  prev_smallest_start_block= 0;
+  int next_vacant_block_idx = 0, prev_smallest_start_block = 0;
   for (int i = 0; i < gfilenum - 1; i++) { // we need to exclude the new file created
     int curr_lowset_start_block_idx = 8 * fs->SUPERBLOCK_SIZE;
     int curr_lowest_start_block_fp;
     for (int j = 0; j < fs->FCB_ENTRIES; j++) {
-      if (get_file_attr(fs, j, 0, 1) == FCB_INVALID) continue;
-      int file_start_block_idx = get_file_attr(fs, j, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
+      if (get_file_attr<char>(fs, j, 0) == FCB_INVALID) continue;
+      int file_start_block_idx = (int)get_file_attr<short>(fs, j, STARTBLK_ATTR_OFFSET);
       if (file_start_block_idx <= prev_smallest_start_block) continue;
       if (file_start_block_idx < curr_lowset_start_block_idx) {
         curr_lowset_start_block_idx = file_start_block_idx;
@@ -231,7 +214,6 @@ __device__ int fs_compress(FileSystem* fs) {
 __device__ u32 fs_allocate(FileSystem* fs, int block_num) {
   /* Return the index of first block that can hold $block_num blocks*/
   /* Use first fit algirthm. First, check if the volume has enough space.*/
-  if (!has_enough_space(fs, block_num)) return fs->SUPERBLOCK_SIZE * 8;
   /* If there are enough space */
   int count = 0;
   int t_block_idx = 0;
@@ -268,11 +250,11 @@ __device__ u32 fs_open(FileSystem* fs, char* s, int op)
       }
       else {
         ret_val = query.empty_index;
-        set_file_attr(fs, query.empty_index, 0, 1, FCB_VALID);
+        set_file_attr<char>(fs, query.empty_index, 0, FCB_VALID);
         set_file_attr(fs, query.empty_index, NAME_ATTR_OFFSET, s); // set file name
-        set_file_attr(fs, query.empty_index, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, 0); // set file size
-        set_file_attr(fs, query.empty_index, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH, gtime); // set create time
-        set_file_attr(fs, query.empty_index, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime); // set modify time
+        set_file_attr<int>(fs, query.empty_index, SIZE_ATTR_OFFSET, 0); // set file size
+        set_file_attr<short>(fs, query.empty_index, CREATE_TIME_ATTR_OFFSET, gtime); // set create time
+        set_file_attr<short>(fs, query.empty_index, MODIFY_TIME_ATTR_OFFSET, gtime); // set modify time
         gtime++;
         gfilenum++;
       }
@@ -296,7 +278,7 @@ __device__ void fs_read(FileSystem* fs, uchar* output, u32 size, u32 fp)
     printf("File not found.\n");
     return;
   }
-  int file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+  int file_size = get_file_attr<int>(fs, fp, SIZE_ATTR_OFFSET);
   if (size > file_size) {
     printf("Read size exceeds file size.\n");
     return;
@@ -316,43 +298,45 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
     printf("Invalid fp.\n");
     return 1;
   }
-  u32 orgn_file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+  u32 orgn_file_size = get_file_attr<int>(fs, fp, SIZE_ATTR_OFFSET);
   int orgn_pos_max_size = floor((float)orgn_file_size / fs->STORAGE_BLOCK_SIZE) * fs->STORAGE_BLOCK_SIZE; // the maximum size the previous location can hold 
-  u32 new_file_base_addr = get_file_base_addr(fs, fp); // set the new file base address to the original one
-  u32 new_file_start_block = get_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH); // as well as the new file start block
+  u32 new_file_base_addr, new_file_start_block;
+  if (orgn_file_size) {
+    new_file_base_addr = get_file_base_addr(fs, fp); // set the new file base address to the original one
+    new_file_start_block = (u32) get_file_attr<short>(fs, fp, STARTBLK_ATTR_OFFSET); // as well as the new file start block
+  }
   // printf("originally file is %d Bytes.\n", orgn_file_size);
-  // printf("The original space can store up to %d Bytes of file.\n", orgn_pos_max_size);
   if (size < orgn_file_size) { // If the new size is smaller than the original file, clear VCB and set according to new size
     vcb_set(fs, fp, 0); // clear the VCB bits
-    set_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, size); // update file size
+    set_file_attr<int>(fs, fp, SIZE_ATTR_OFFSET, size); // update file size
     vcb_set(fs, fp, 1); // set the VCB bits
   }
   else if (size > orgn_pos_max_size)
   { // need to reallocate space for file.Clear previous VCB and allocate new space.
-    int new_block_num = ceil((float)size / fs->STORAGE_BLOCK_SIZE);
+    int new_block_size = ceil((float)size / fs->STORAGE_BLOCK_SIZE);
     vcb_set(fs, fp, 0);
-    set_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, size); // update file size
-    new_file_start_block = fs_allocate(fs, new_block_num);
+    set_file_attr<int>(fs, fp, SIZE_ATTR_OFFSET, size); // update file size
+    new_file_start_block = fs_allocate(fs, new_block_size);
     if (new_file_start_block == fs->SUPERBLOCK_SIZE * 8) {
       printf("No enough space.\n");
       // roll back
-      set_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, orgn_file_size);
+      set_file_attr<int>(fs, fp, SIZE_ATTR_OFFSET, orgn_file_size);
       vcb_set(fs, fp, 1);
       return 1;
     }
-    set_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH, new_file_start_block); // update file start block
+    set_file_attr<short>(fs, fp, STARTBLK_ATTR_OFFSET, new_file_start_block); // update file start block
     vcb_set(fs, fp, 1);
     new_file_base_addr = get_file_base_addr(fs, fp);
   }
   else {
-    set_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, size); // update file size
+    set_file_attr<short>(fs, fp, SIZE_ATTR_OFFSET, size); // update file size
   }
   // write $size bytes to the new starting position 
   // set_file_attr(fs, fcb_base_addr + SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, size); // set file size
-  for (int i = 0; i < size; i++){ // write file content
+  for (int i = 0; i < size; i++) { // write file content
     fs->volume[new_file_base_addr + i] = input[i];
   }
-  set_file_attr(fs, fp, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime); // set modify time
+  set_file_attr<short>(fs, fp, MODIFY_TIME_ATTR_OFFSET, gtime); // set modify time
   gtime++;
   return 0;
 }
@@ -368,13 +352,12 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       int curr_youngest_modtime = -1;
       char* curr_file_name;
       for (int j = 0; j < fs->FCB_ENTRIES; j++) {
-        if (get_file_attr(fs, j, 0, 1) == FCB_INVALID) continue;
-        int file_modtime = get_file_attr(fs, j, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
+        if (get_file_attr<char>(fs, j, 0) == FCB_INVALID) continue;
+        int file_modtime = get_file_attr<short>(fs, j, MODIFY_TIME_ATTR_OFFSET);
         if (file_modtime >= prev_youngest_modtime) continue;
         if (file_modtime > curr_youngest_modtime) {
           curr_youngest_modtime = file_modtime;
           curr_file_name = get_file_attr(fs, j, NAME_ATTR_OFFSET);
-
         }
       }
       printf("%-20s\n", curr_file_name);
@@ -388,9 +371,9 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       int curr_max_size = -1, curr_oldest_create_time = gtime;
       char* curr_file_name;
       for (int j = 0; j < fs->FCB_ENTRIES; j++) {
-        if (get_file_attr(fs, j, 0, 1) == FCB_INVALID) continue;
-        int file_size = get_file_attr(fs, j, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
-        int file_create_time = get_file_attr(fs, j, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH);
+        if (get_file_attr<char>(fs, j, 0) == FCB_INVALID) continue;
+        int file_size = get_file_attr<int>(fs, j, SIZE_ATTR_OFFSET);
+        short file_create_time = get_file_attr<short>(fs, j, CREATE_TIME_ATTR_OFFSET);
         if (file_size > prev_max_size || (file_size == prev_max_size) && file_create_time <= prev_oldest_create_time) continue;
         if (file_size > curr_max_size || (file_size == curr_max_size && file_create_time < curr_oldest_create_time)) {
           curr_max_size = file_size;
@@ -410,19 +393,19 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       int curr_smallest_start_block = fs->SUPERBLOCK_SIZE * 8;
       int curr_fp;
       for (int j = 0; j < fs->FCB_ENTRIES; j++) {
-        if (get_file_attr(fs, j, 0, 1) == FCB_INVALID) continue;
-        int file_startblock = get_file_attr(fs, j, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
-        if (file_startblock <= prev_smallest_start_block) continue;
+        if (get_file_attr<char>(fs, j, 0) == FCB_INVALID) continue;
+        short file_startblock = get_file_attr<short>(fs, j, STARTBLK_ATTR_OFFSET);
+        if ((file_startblock) <= prev_smallest_start_block) continue;
         if (file_startblock < curr_smallest_start_block) {
           curr_smallest_start_block = file_startblock;
           curr_fp = j;
         }
       }
       char* curr_file_name = get_file_attr(fs, curr_fp, NAME_ATTR_OFFSET);
-      int curr_file_modtime = get_file_attr(fs, curr_fp, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
-      int curr_file_size = get_file_attr(fs, curr_fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
-      int curr_file_createtime = get_file_attr(fs, curr_fp, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH);
-      int curr_file_startblock = get_file_attr(fs, curr_fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
+      short curr_file_modtime = get_file_attr<short>(fs, curr_fp, MODIFY_TIME_ATTR_OFFSET);
+      int curr_file_size = get_file_attr<int>(fs, curr_fp, SIZE_ATTR_OFFSET);
+      short curr_file_createtime = get_file_attr<short>(fs, curr_fp, CREATE_TIME_ATTR_OFFSET);
+      short curr_file_startblock = get_file_attr<short>(fs, curr_fp, STARTBLK_ATTR_OFFSET);
       int curr_file_endblock = get_file_end_block(fs, curr_fp);
       printf("#%4d FCB Index:%-4d\tFile name:%-20s\tSize:%-10d\tStarts on block:%-5d\tEnds on block:%-5d\tTime created:%-5d\tTime modified:%-5d\n", i, curr_fp, curr_file_name, curr_file_size, curr_file_startblock, curr_file_endblock, curr_file_createtime, curr_file_modtime);
       prev_smallest_start_block = curr_smallest_start_block;
@@ -445,6 +428,6 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
     printf("No file named %s to delete.\n", s);
   }
   vcb_set(fs, query.FCB_index, 0);
-  set_file_attr(fs, query.FCB_index, 0, 1, FCB_INVALID);
+  set_file_attr<char>(fs, query.FCB_index, 0, FCB_INVALID);
   gfilenum--;
 }
