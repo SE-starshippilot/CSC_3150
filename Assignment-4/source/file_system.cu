@@ -19,7 +19,7 @@ __device__ __managed__ int gfilenum = 0;
 
 __device__ void fcb_init(FileSystem* fs) {
   for (u32 i = 0; i < fs->FCB_ENTRIES; i++) {
-    set_file_attr(fs, i, 0, FCB_INVALID);// MSB in the first byte of FCB is valid bit. 0 indicates invalid.
+    set_file_attr<uchar>(fs, i, 0, FCB_INVALID);// MSB in the first byte of FCB is valid bit. 0 indicates invalid.
   }
 }
 
@@ -67,17 +67,21 @@ __device__ int is_same_str(char* str1, char* str2) {
   else return 0;
 }
 
+__device__ int strlen(char* str) {
+  /* Return the length of a string. */
+  int len = 0;
+  while (*str != '\0') {
+    len++;
+    str++;
+  }
+  return len;
+}
+
 template <typename T>
-__device__ T get_file_attr(FileSystem* fs, u32 fp, int attr_offset) {
+__device__ T get_file_attr<char*>(FileSystem* fs, u32 fp, int attr_offset) {
   /* Read file attribute from FCB. */
   T* ret_ptr = (T*)fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
   return *ret_ptr;
-}
-
-__device__ char* get_file_attr(FileSystem* fs, u32 fp, int attr_offset) {
-  u32 fcb_attr_addr = fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
-  char* file_name = (char*) fs->volume + fcb_attr_addr;
-  return file_name;
 }
 
 template <typename T>
@@ -85,18 +89,6 @@ __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, T value) 
   /* Set file attribute. */
   T* fcb_attr = (T*)fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
   *fcb_attr = value;
-}
-__device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, char* value) {
-  /* Set file attribute. This reloaded function is for setting file name only. */
-  int filename_byte_idx = 0;
-  uchar* fcb_attr = (uchar*)fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
-  while (*value != '\0' && filename_byte_idx < fs->MAX_FILENAME_SIZE) {
-    *fcb_attr = *value;
-    fcb_attr++;
-    value++;
-    filename_byte_idx++;
-  }
-  *fcb_attr = '\0';
 }
 
 __device__ FCBQuery search_file(FileSystem* fs, char* s) {
@@ -106,7 +98,7 @@ __device__ FCBQuery search_file(FileSystem* fs, char* s) {
   FCBQuery ret_val = { -1, -1 };
   for (u32 i = 0; i < fs->FCB_ENTRIES; i++) {
     if (get_file_attr<uchar>(fs, i, 0) == FCB_VALID) { // valid bit is set
-      char* file_name = get_file_attr(fs, i, NAME_ATTR_OFFSET);
+      char* file_name = get_file_attr<char*>(fs, i, NAME_ATTR_OFFSET);
       if (is_same_str(s, file_name)) {
         ret_val.FCB_index = i;
         return ret_val;
@@ -197,7 +189,7 @@ __device__ int fs_compress(FileSystem* fs) {
     int curr_lowset_start_block_idx = 8 * fs->SUPERBLOCK_SIZE;
     int curr_lowest_start_block_fp;
     for (int j = 0; j < fs->FCB_ENTRIES; j++) {
-      if (get_file_attr<char>(fs, j, 0) == FCB_INVALID) continue;
+      if (get_file_attr<uchar>(fs, j, 0) != FCB_VALID) continue;
       int file_start_block_idx = (int)get_file_attr<short>(fs, j, STARTBLK_ATTR_OFFSET);
       if (file_start_block_idx <= prev_smallest_start_block) continue;
       if (file_start_block_idx < curr_lowset_start_block_idx) {
@@ -249,14 +241,20 @@ __device__ u32 fs_open(FileSystem* fs, char* s, int op)
         ret_val = fs->FCB_ENTRIES;
       }
       else {
-        ret_val = query.empty_index;
-        set_file_attr<char>(fs, query.empty_index, 0, FCB_VALID);
-        set_file_attr(fs, query.empty_index, NAME_ATTR_OFFSET, s); // set file name
-        set_file_attr<int>(fs, query.empty_index, SIZE_ATTR_OFFSET, 0); // set file size
-        set_file_attr<short>(fs, query.empty_index, CREATE_TIME_ATTR_OFFSET, gtime); // set create time
-        set_file_attr<short>(fs, query.empty_index, MODIFY_TIME_ATTR_OFFSET, gtime); // set modify time
-        gtime++;
-        gfilenum++;
+        if (strlen(s) > fs->MAX_FILENAME_SIZE) {
+          printf("Filename too long.\n");
+          ret_val = fs->FCB_ENTRIES;
+        }
+        else {
+          ret_val = query.empty_index;
+          set_file_attr<uchar>(fs, ret_val, 0, FCB_VALID);
+          set_file_attr<char*>(fs, ret_val, NAME_ATTR_OFFSET, s); // set file name
+          set_file_attr<int>(fs, ret_val, SIZE_ATTR_OFFSET, 0); // set file size
+          set_file_attr<short>(fs, ret_val, CREATE_TIME_ATTR_OFFSET, gtime); // set create time
+          set_file_attr<short>(fs, ret_val, MODIFY_TIME_ATTR_OFFSET, gtime); // set modify time
+          gtime++;
+          gfilenum++;
+        }
       }
     }
   }
@@ -303,7 +301,7 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
   u32 new_file_base_addr, new_file_start_block;
   if (orgn_file_size) {
     new_file_base_addr = get_file_base_addr(fs, fp); // set the new file base address to the original one
-    new_file_start_block = (u32) get_file_attr<short>(fs, fp, STARTBLK_ATTR_OFFSET); // as well as the new file start block
+    new_file_start_block = (u32)get_file_attr<short>(fs, fp, STARTBLK_ATTR_OFFSET); // as well as the new file start block
   }
   // printf("originally file is %d Bytes.\n", orgn_file_size);
   if (size < orgn_file_size) { // If the new size is smaller than the original file, clear VCB and set according to new size
@@ -352,12 +350,12 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       int curr_youngest_modtime = -1;
       char* curr_file_name;
       for (int j = 0; j < fs->FCB_ENTRIES; j++) {
-        if (get_file_attr<char>(fs, j, 0) == FCB_INVALID) continue;
+        if (get_file_attr<uchar>(fs, j, 0) != FCB_VALID) continue;
         int file_modtime = get_file_attr<short>(fs, j, MODIFY_TIME_ATTR_OFFSET);
         if (file_modtime >= prev_youngest_modtime) continue;
         if (file_modtime > curr_youngest_modtime) {
           curr_youngest_modtime = file_modtime;
-          curr_file_name = get_file_attr(fs, j, NAME_ATTR_OFFSET);
+          curr_file_name = get_file_attr<char*>(fs, j, NAME_ATTR_OFFSET);
         }
       }
       printf("%-20s\n", curr_file_name);
@@ -371,14 +369,14 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       int curr_max_size = -1, curr_oldest_create_time = gtime;
       char* curr_file_name;
       for (int j = 0; j < fs->FCB_ENTRIES; j++) {
-        if (get_file_attr<char>(fs, j, 0) == FCB_INVALID) continue;
+        if (get_file_attr<uchar>(fs, j, 0) != FCB_VALID) continue;
         int file_size = get_file_attr<int>(fs, j, SIZE_ATTR_OFFSET);
         short file_create_time = get_file_attr<short>(fs, j, CREATE_TIME_ATTR_OFFSET);
         if (file_size > prev_max_size || (file_size == prev_max_size) && file_create_time <= prev_oldest_create_time) continue;
         if (file_size > curr_max_size || (file_size == curr_max_size && file_create_time < curr_oldest_create_time)) {
           curr_max_size = file_size;
           curr_oldest_create_time = file_create_time;
-          curr_file_name = get_file_attr(fs, j, NAME_ATTR_OFFSET);
+          curr_file_name = get_file_attr<char*>(fs, j, NAME_ATTR_OFFSET);
         }
       }
       printf("%-20s\t %d\n", curr_file_name, curr_max_size);
@@ -393,7 +391,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       int curr_smallest_start_block = fs->SUPERBLOCK_SIZE * 8;
       int curr_fp;
       for (int j = 0; j < fs->FCB_ENTRIES; j++) {
-        if (get_file_attr<char>(fs, j, 0) == FCB_INVALID) continue;
+        if (get_file_attr<uchar>(fs, j, 0) != FCB_VALID || get_file_attr<int>(fs, j, SIZE_ATTR_OFFSET) == 0) continue;
         short file_startblock = get_file_attr<short>(fs, j, STARTBLK_ATTR_OFFSET);
         if ((file_startblock) <= prev_smallest_start_block) continue;
         if (file_startblock < curr_smallest_start_block) {
@@ -401,7 +399,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
           curr_fp = j;
         }
       }
-      char* curr_file_name = get_file_attr(fs, curr_fp, NAME_ATTR_OFFSET);
+      char* curr_file_name = get_file_attr<char*>(fs, curr_fp, NAME_ATTR_OFFSET);
       short curr_file_modtime = get_file_attr<short>(fs, curr_fp, MODIFY_TIME_ATTR_OFFSET);
       int curr_file_size = get_file_attr<int>(fs, curr_fp, SIZE_ATTR_OFFSET);
       short curr_file_createtime = get_file_attr<short>(fs, curr_fp, CREATE_TIME_ATTR_OFFSET);
@@ -428,6 +426,17 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
     printf("No file named %s to delete.\n", s);
   }
   vcb_set(fs, query.FCB_index, 0);
-  set_file_attr<char>(fs, query.FCB_index, 0, FCB_INVALID);
+  set_file_attr<uchar>(fs, query.FCB_index, 0, FCB_INVALID);
   gfilenum--;
+}
+
+
+__device__ void fs_diagnose(FileSystem* fs, u32 fp) {
+  char* file_name = get_file_attr<char*>(fs, fp, NAME_ATTR_OFFSET);
+  short file_modtime = get_file_attr<short>(fs, fp, MODIFY_TIME_ATTR_OFFSET);
+  int file_size = get_file_attr<int>(fs, fp, SIZE_ATTR_OFFSET);
+  short file_createtime = get_file_attr<short>(fs, fp, CREATE_TIME_ATTR_OFFSET);
+  short file_startblock = get_file_attr<short>(fs, fp, STARTBLK_ATTR_OFFSET);
+  int file_endblock = get_file_end_block(fs, fp);
+  printf("FCB Index:%-4d\tFile name:%-20s\tSize:%-10d\tStarts on block:%-5d\tEnds on block:%-5d\tTime created:%-5d\tTime modified:%-5d\n", fp, file_name, file_size, file_startblock, file_endblock, file_createtime, file_modtime);
 }
