@@ -1,7 +1,7 @@
 ﻿#include "file_system.h"
 #include <cuda.h>
 #include <cuda_runtime.h>
-
+#include <stdio.h>
 __device__ void user_program(FileSystem *fs, uchar *input, uchar *output) {
 	
 	/*
@@ -65,7 +65,7 @@ __device__ void user_program(FileSystem *fs, uchar *input, uchar *output) {
 	fs_gsys(fs,LS_D);
 	*/
 
-	///*
+	/*
 	/////////////// Test Case 3  ///////////////
 	u32 fp = fs_open(fs, "t.txt\0", G_WRITE);
 	fs_write(fs, input, 64, fp);
@@ -109,16 +109,15 @@ __device__ void user_program(FileSystem *fs, uchar *input, uchar *output) {
 	char fname2[1018][20];
 	int p = 0;
 
-	// /*
-	//  * How the naming works:
-	//  * 1. k controls the file name length(ranging from 2 to 14, inclusive)
-	//  * 2. i controls the first character of the file name(ranging from 50->[ASCII=2] to 126->[ASCII=~], inclusive)
-	//  * 3. j controls other character of the file name(ranging from 1 to k-1, inclusive)
-	//  * 
-	//  * for every k there are 76 files with different first character and the same length
-	//  * 2A -> 3A -> 4A -> ... -> ~A -> 2AB -> 3AB -> 4AB -> ... -> ~AB -> 2ABC -> ... -> ~ABCDEFGHIJKLM
-	//  * |<-----------76---------->|     |<-----------76---------->|     
-	//  */
+	// How the naming works:
+	// 1. k controls the file name length(ranging from 2 to 14, inclusive)
+	// 2. i controls the first character of the file name(ranging from 50->[ASCII=2] to 126->[ASCII=~], inclusive)
+	// 3. j controls other character of the file name(ranging from 1 to k-1, inclusive)
+	// 
+	// for every k there are 76 files with different first character and the same length
+	// 2A -> 3A -> 4A -> ... -> ~A -> 2AB -> 3AB -> 4AB -> ... -> ~AB -> 2ABC -> ... -> ~ABCDEFGHIJKLM
+	// |<-----------76---------->|     |<-----------76---------->|     
+
 	for (int k = 2; k < 15; k++)
 		for (int i = 50; i <= 126; i++, p++)
 		{
@@ -127,7 +126,7 @@ __device__ void user_program(FileSystem *fs, uchar *input, uchar *output) {
 				fname2[p][j] = 64 + j;
 			fname2[p][k] = '\0';
 		}
-	// // each file in fname2 is of size 24+i bytes, where i is the index of the file in fname2. The content starts from the ith byte of input
+	// each file in fname2 is of size 24+i bytes, where i is the index of the file in fname2. The content starts from the ith byte of input
 	for (int i = 0; i < 1001; i++)
 	{
 		fp = fs_open(fs, fname2[i], G_WRITE);
@@ -151,10 +150,10 @@ __device__ void user_program(FileSystem *fs, uchar *input, uchar *output) {
 	fp = fs_open(fs, "EA\0", G_WRITE);
 	fs_write(fs, input + 1024 * 100, 1024, fp);
 	fs_gsys(fs, LS_S);
-	//*/
+	*/
 
 	/////////////// Test Case 4  ///////////////
-	/*
+	///*
     u32 fp = fs_open(fs, "32-block-0", G_WRITE);
     fs_write(fs, input, 32, fp);
     for (int j = 0; j < 1023; ++j) {
@@ -192,5 +191,5 @@ __device__ void user_program(FileSystem *fs, uchar *input, uchar *output) {
         fp = fs_open(fs, tag, G_READ);
         fs_read(fs, output + j * 1024, 1024, fp);
     }
-	*/
+	//*/
 }
