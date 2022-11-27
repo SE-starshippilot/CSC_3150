@@ -89,7 +89,6 @@ __device__ char* get_file_attr(FileSystem* fs, u32 fp, int attr_offset) {
 __device__ int get_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length) {
   /* Read file attribute from FCB. */
   u32 fcb_attr_addr = fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
-  // printf("[Read Attr from addr %d, length %d]\n", fcb_attr_addr, attr_length);
   int result = 0;
   memcpy(&result, fs->volume + fcb_attr_addr, attr_length);
   return result;
