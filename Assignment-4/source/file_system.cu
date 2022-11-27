@@ -75,9 +75,9 @@ __device__ int str_cmp(char* str1, char* str2) {
 
 __device__ int str_len(const char* str) {
   /* Return the length of a string. */
-    const char *s;
-    for (s = str; *s; ++s);
-    return(s - str);
+  const char* s;
+  for (s = str; *s; ++s);
+  return(s - str);
 }
 
 __device__ char* get_file_attr(FileSystem* fs, u32 fp, int attr_offset) {
@@ -104,7 +104,7 @@ __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_
   /* Set file attribute. This reloaded function is for setting file name only. */
   // int fcb_attr_addr = fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
   memcpy(fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset, value, attr_length);
-  memset(fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset + attr_length,  0, 1);
+  memset(fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset + attr_length, 0, 1);
 }
 
 __device__ FCBQuery search_file(FileSystem* fs, char* s) {
@@ -267,7 +267,7 @@ __device__ u32 fs_open(FileSystem* fs, char* s, int op)
 {
   /* Implement open operation here */
   int file_name_length = str_len(s);
-  if (file_name_length > fs->MAX_FILENAME_SIZE) return FP_INVALID<<1;
+  if (file_name_length > fs->MAX_FILENAME_SIZE) return FP_INVALID << 1;
   FCBQuery query = search_file(fs, s);
   int ret_val = query.FCB_index;
   if (op == G_WRITE) {
@@ -362,46 +362,62 @@ __device__ void fs_gsys(FileSystem* fs, int op)
   /* Implement LS_D and LS_S operation here */
   if (op == LS_D) {
     /* Since at each time only one file is modified, two files cannot have the same modification time.*/
-    printf("===sort by modified time===\n");
-    int prev_youngest_modtime = gtime;
+    u32* fcb_arr = new u32[gfilenum];
+    u32* modtime_arr = new u32[gfilenum];
+    for (int i = 0; i < fs->FCB_ENTRIES; i++) {
+      if (get_file_attr(fs, i, 0, 1) == FCB_VALID) {
+        fcb_arr[i] = i;
+        modtime_arr[i] = get_file_attr(fs, i, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
+      }
+    }
     for (int i = 0; i < gfilenum; i++) {
-      int curr_youngest_modtime = -1;
-      char* curr_file_name;
-      for (int j = 0; j < fs->FCB_ENTRIES; j++) {
-        if (get_file_attr(fs, j, 0, 1) == FCB_INVALID) continue;
-        int file_modtime = get_file_attr(fs, j, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
-        if (file_modtime >= prev_youngest_modtime) continue;
-        if (file_modtime > curr_youngest_modtime) {
-          curr_youngest_modtime = file_modtime;
-          curr_file_name = get_file_attr(fs, j, NAME_ATTR_OFFSET);
-
+      for (int j = i + 1; j < gfilenum; j++) {
+        if (modtime_arr[i] < modtime_arr[j]) {
+          u32 temp = modtime_arr[i];
+          modtime_arr[i] = modtime_arr[j];
+          modtime_arr[j] = temp;
+          temp = fcb_arr[i];
+          fcb_arr[i] = fcb_arr[j];
+          fcb_arr[j] = temp;
         }
       }
-      printf("%-20s\n", curr_file_name);
-      prev_youngest_modtime = curr_youngest_modtime;
     }
+    printf("===sort by modified time===\n");
+    for (int i = 0; i < gfilenum; i++) {
+      printf("%-20s\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET));
+    }
+    delete[] fcb_arr;
+    delete[] modtime_arr;
   }
   else if (op == LS_S) {
-    printf("===sort by file size===\n");
-    int prev_max_size = fs->MAX_FILE_SIZE, prev_oldest_create_time = -1;
+    u32* fcb_arr = new u32[gfilenum];
+    u32* size_arr = new u32[gfilenum];
+    for (int i = 0; i < fs->FCB_ENTRIES; i++) {
+      if (get_file_attr(fs, i, 0, 1) == FCB_VALID) {
+        fcb_arr[i] = i;
+        size_arr[i] = get_file_attr(fs, i, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+      }
+    }
     for (int i = 0; i < gfilenum; i++) {
-      int curr_max_size = -1, curr_oldest_create_time = gtime;
-      char* curr_file_name;
-      for (int j = 0; j < fs->FCB_ENTRIES; j++) {
-        if (get_file_attr(fs, j, 0, 1) == FCB_INVALID) continue;
-        int file_size = get_file_attr(fs, j, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
-        int file_create_time = get_file_attr(fs, j, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH);
-        if (file_size > prev_max_size || (file_size == prev_max_size) && file_create_time <= prev_oldest_create_time) continue;
-        if (file_size > curr_max_size || (file_size == curr_max_size && file_create_time < curr_oldest_create_time)) {
-          curr_max_size = file_size;
-          curr_oldest_create_time = file_create_time;
-          curr_file_name = get_file_attr(fs, j, NAME_ATTR_OFFSET);
+      for (int j = i + 1; j < gfilenum; j++) {
+        if (size_arr[i] < size_arr[j] ||
+          (size_arr[i] == size_arr[j] && get_file_attr(fs, fcb_arr[i], CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH) > get_file_attr(fs, fcb_arr[j], CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH))
+          ) {
+          u32 temp = size_arr[i];
+          size_arr[i] = size_arr[j];
+          size_arr[j] = temp;
+          temp = fcb_arr[i];
+          fcb_arr[i] = fcb_arr[j];
+          fcb_arr[j] = temp;
         }
       }
-      printf("%-20s\t %d\n", curr_file_name, curr_max_size);
-      prev_max_size = curr_max_size;
-      prev_oldest_create_time = curr_oldest_create_time;
+    printf("===sort by file size===\n");
+    for (int i = 0; i < gfilenum; i++) {
+      printf("%-20s\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET));
     }
+    }
+    delete[] fcb_arr;
+    delete[] size_arr;
   }
   else if (op == LS_DR) {
     printf("===sort by start block index===\n");
