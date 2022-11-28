@@ -100,7 +100,6 @@ __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_
 
 __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length, char* value) {
   /* Set file attribute. This reloaded function is for setting file name only. */
-  // int fcb_attr_addr = fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset;
   memcpy(fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset, value, attr_length);
   memset(fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset + attr_length, 0, 1);
 }
@@ -135,7 +134,6 @@ __device__ u32 get_file_base_addr(FileSystem* fs, u32 fp) {
 
 __device__ u32 get_block_idx(FileSystem* fs, u32 addr) {
   /* Given an address(in the volume), return the corresponding block ID*/
-  // printf("addr=%d;\tbase_addr=%d\t;\tdelta=%d.\n", addr, fs->FILE_BASE_ADDRESS, addr - fs->FILE_BASE_ADDRESS);
   return (addr - fs->FILE_BASE_ADDRESS) / fs->STORAGE_BLOCK_SIZE;
 }
 
@@ -443,31 +441,6 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     }
     delete[] fcb_arr;
     delete[] size_arr;
-  }
-  else if (op == LS_DR) {
-    printf("===sort by start block index===\n");
-    int prev_smallest_start_block = -1;
-    for (int i = 0; i < gfilenum; i++) {
-      int curr_smallest_start_block = fs->SUPERBLOCK_SIZE * 8;
-      int curr_fp;
-      for (int j = 0; j < fs->FCB_ENTRIES; j++) {
-        if (get_file_attr(fs, j, 0, 1) == FCB_INVALID) continue;
-        int file_startblock = get_file_attr(fs, j, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
-        if (file_startblock <= prev_smallest_start_block) continue;
-        if (file_startblock < curr_smallest_start_block) {
-          curr_smallest_start_block = file_startblock;
-          curr_fp = j;
-        }
-      }
-      char* curr_file_name = get_file_attr(fs, curr_fp, NAME_ATTR_OFFSET);
-      int curr_file_modtime = get_file_attr(fs, curr_fp, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
-      int curr_file_size = get_file_attr(fs, curr_fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
-      int curr_file_createtime = get_file_attr(fs, curr_fp, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH);
-      int curr_file_startblock = get_file_attr(fs, curr_fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
-      int curr_file_endblock = get_file_end_block(fs, curr_fp);
-      printf("#%4d FCB Index:%-4d\tFile name:%-20s\tSize:%-10d\tStarts on block:%-5d\tEnds on block:%-5d\tTime created:%-5d\tTime modified:%-5d\n", i, curr_fp, curr_file_name, curr_file_size, curr_file_startblock, curr_file_endblock, curr_file_createtime, curr_file_modtime);
-      prev_smallest_start_block = curr_smallest_start_block;
-    }
   }
   else {
     printf("Invalid operation code [%d]\n", op);
