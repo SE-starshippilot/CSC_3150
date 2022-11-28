@@ -16,12 +16,14 @@
 #define STARTBLK_ATTR_LENGTH 2
 #define PARDIR_ATTR_LENGTH 2
 #define SIZE_ATTR_LENGTH 4
-#define FCB_VALID 0b10000000
-#define FCB_INVALID 0b00000000
-#define DIR 0b11000000
+#define MISC_ATTR_LENGTH 2
+#define FCB_VALID 0x80
+#define FCB_INVALID 0x00
+#define DIR 0xc000
 #define FP_INVALID 1024
-#define PARENT_DIR(x) x&0x03ff
-#define DIR_LEVEL(x) (x&0x30) >> 4 
+#define FORMAT_PARENT_FP(x) x&0x03ff
+#define GET_DIR_LEVEL(x) (x&0x30) >> 4 
+#define SET_DIR_LEVEL(x, y) x & (y >> 4)
 
 __device__ __managed__ u32 gtime = 0;       // increasing. larger means newer
 __device__ __managed__ u32 gfilenum = 0;    // number of files present in the file system
@@ -118,6 +120,17 @@ __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_
   /* Set file attribute. This reloaded function is for setting file name only. */
   memcpy(fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset, value, attr_length);
   memset(fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset + attr_length, 0, 1);
+}
+
+__device__ void recursive_set_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length, int value){
+  set_file_attr(fs, fp, attr_offset, attr_length, value);
+  if (fp){
+    int raw_parent_fp = get_file_attr(fs, fp, 0, PARDIR_ATTR_LENGTH);
+    int parent_fp = FORMAT_PARENT_FP(raw_parent_fp);
+    return recursive_set_file_attr(fs, parent_fp, attr_offset, attr_length, value);
+  } else {
+    return;
+  }
 }
 
 __device__ FCBQuery search_file(FileSystem* fs, char* s) {
@@ -446,17 +459,17 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     break;
   case CD_P:
     int raw_pd = get_file_attr(fs, gcwd, 0, 2);
-    gcwd = PARENT_DIR(raw_pd);
+    gcwd = FORMAT_PARENT_FP(raw_pd);
     break;
   case PWD:
     int tcwd = gcwd;
     int tinfo = get_file_attr(fs, tcwd, 0, 1);
-    int tlevel = DIR_LEVEL(tinfo);
+    int tlevel = GET_DIR_LEVEL(tinfo);
     int* working_dir = new int[tlevel];
     for (int i = 0; i < tlevel; i++) {
       working_dir[i] = tcwd;
       int tparent = get_file_attr(fs, tcwd, 0, PARDIR_ATTR_LENGTH);
-      tcwd = PARENT_DIR(tparent);
+      tcwd = FORMAT_PARENT_FP(tparent);
     }
     for (int i = tlevel - 1; i >= 0; i--)
       printf("/%s", get_file_attr(fs, working_dir[i], NAME_ATTR_OFFSET));
@@ -475,6 +488,9 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
   FCBQuery query = search_file(fs, s);
   if (query.FCB_index == FP_INVALID && op != MKDIR) {
     printf("No file named %s");
+    return;
+  } else if (query.FCB_index != FP_INVALID && op == MKDIR){
+    printf("File named %s already exists\n", s);
     return;
   }
   switch (op) {
@@ -521,6 +537,22 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
       printf("Cannot CD into a file.\n");
     }
     gcwd = query.FCB_index;
+    break;
+  case MKDIR:
+    if (gfilenum == fs->MAX_FILE_NUM || query.empty_index == FP_INVALID) {
+      printf("Cannot create more directoryes.\n");
+      return;
+    }
+    int new_fcb = query.empty_index;
+    int parent_fp = gcwd;
+    int raw_dir_info = get_file_attr(fs, parent_fp, 0, 1);
+    int new_dir_level = GET_DIR_LEVEL(raw_dir_info) + 1;
+    int new_misc_info = (((DIR << 4) + (new_dir_level << 2)) << 8) + parent_fp;
+    set_file_attr(fs, new_fcb, 0, MISC_ATTR_LENGTH, new_misc_info);
+    set_file_attr(fs, new_fcb, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH, gtime);
+    recursive_set_file_attr(fs, new_fcb, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime);
+    gfilenum++;
+    gtime++;
     break;
   default:
     printf("Invalid operation code [%d]\n", op);
