@@ -13,8 +13,11 @@ typedef uint32_t u32;
 #define LS_D 0
 #define LS_S 1
 #define RM 2
-
-#define LS_DR 3 //display rich info ranking using LS_D
+#define MKDIR 3
+#define CD 4
+#define CD_P 5
+#define RM_RF 6
+#define PWD 7
 
 struct FileSystem {
 	uchar *volume;
@@ -50,6 +53,8 @@ __device__ void fcb_init(FileSystem* fs);
 __device__ void superblock_init(FileSystem* fs);
 __device__ int str_cmp(char* str1, char* str2);
 __device__ int str_len(const char* str);
+__device__ void str_cat(char* str1, char* str2);
+__device__ void str_cpy(char* str1, char* str2);
 __device__ char* get_file_attr(FileSystem* fs, u32 fp, int attr_offset);
 __device__ int get_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length);
 __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, char* value);

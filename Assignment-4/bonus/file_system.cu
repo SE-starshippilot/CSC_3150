@@ -14,14 +14,19 @@
 #define CREATE_TIME_ATTR_LENGTH 2
 #define MODIFY_TIME_ATTR_LENGTH 2
 #define STARTBLK_ATTR_LENGTH 2
+#define PARDIR_ATTR_LENGTH 2
 #define SIZE_ATTR_LENGTH 4
 #define FCB_VALID 0b10000000
 #define FCB_INVALID 0b00000000
+#define DIR 0b11000000
 #define FP_INVALID 1024
+#define PARENT_DIR(x) x&0x03ff
+#define DIR_LEVEL(x) (x&0x30) >> 4 
 
-__device__ __managed__ u32 gtime = 0; // increasing. larger means newer
-__device__ __managed__ u32 gfilenum = 0;
-__device__ __managed__ u32 glastblock = 0;
+__device__ __managed__ u32 gtime = 0;       // increasing. larger means newer
+__device__ __managed__ u32 gfilenum = 0;    // number of files present in the file system
+__device__ __managed__ u32 glastblock = 0;  // used in next-fit algorithm
+__device__ __managed__ u32 gcwd = 0;        // current working directory. Default is root. root directory is always at fcb#0
 
 __device__ void fcb_init(FileSystem* fs) {
   for (u32 i = 0; i < fs->FCB_ENTRIES; i++) {
@@ -60,6 +65,8 @@ __device__ void fs_init(FileSystem* fs, uchar* volume, int SUPERBLOCK_SIZE,
 
   // init file control block
   fcb_init(fs);
+
+  // create the fcb for root directory
 }
 
 __device__ int str_cmp(char* str1, char* str2) {
@@ -78,6 +85,15 @@ __device__ int str_len(const char* str) {
   const char* s;
   for (s = str; *s; ++s);
   return(s - str);
+}
+
+__device__ int str_cpy(char* str1, const char* str2) {
+  int len_1 = str_len(str1);
+  int len_2 = str_len(str2);
+}
+
+__device__ void str_cat(char* str1, char* str2) {
+
 }
 
 __device__ char* get_file_attr(FileSystem* fs, u32 fp, int attr_offset) {
@@ -173,23 +189,6 @@ __device__ void vcb_set(FileSystem* fs, int fp, int val) {
     }
     for (int i = start_byte + 1; i < end_byte; i++) fs->volume[i] = val;
   }
-}
-
-__device__ int count_occupied_blocks(int VCB_Byte) {
-  int count = 0;
-  while (VCB_Byte) {
-    count++;
-    VCB_Byte &= VCB_Byte - 1;
-  }
-  return count;
-}
-
-__device__ int has_enough_space(FileSystem* fs, int block_size) {
-  /* Check if there is enough space to put $block_size blocks*/
-  int used_blocks = 0;
-  for (int i = 0; i < fs->SUPERBLOCK_SIZE; i++)
-    used_blocks += count_occupied_blocks(fs->volume[i]);
-  return fs->SUPERBLOCK_SIZE * 8 - used_blocks >= block_size;
 }
 
 __device__ int move_file(FileSystem* fs, u32 fp, int new_start_block_idx) {
@@ -371,8 +370,9 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
 __device__ void fs_gsys(FileSystem* fs, int op)
 {
   /* Implement LS_D and LS_S operation here */
-  if (op == LS_D) {
-    /* Since at each time only one file is modified, two files cannot have the same modification time.*/
+  switch (op)
+  {
+  case LS_D:
     int* fcb_arr = new int[gfilenum];
     int* modtime_arr = new int[gfilenum];
     int files_found = 0;
@@ -401,12 +401,13 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     }
     printf("===sort by modified time===\n");
     for (int i = 0; i < gfilenum; i++) {
-      printf("%-20s\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET),modtime_arr[i]);
+      char is_dir = (get_file_attr(0, fcb_arr[i], 0, 1) == DIR)? ' ':'d';
+      printf("%-20s\t%c\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET), modtime_arr[i], is_dir);
     }
     delete[] fcb_arr;
     delete[] modtime_arr;
-  }
-  else if (op == LS_S) {
+    break;
+  case LS_S:
     int* fcb_arr = new int[gfilenum];
     int* size_arr = new int[gfilenum];
     int files_found = 0;
@@ -437,30 +438,59 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     }
     printf("===sort by file size===\n");
     for (int i = 0; i < gfilenum; i++) {
-      printf("%-20s\t%-8d\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET), get_file_attr(fs, fcb_arr[i], SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH));
+      char is_dir = (get_file_attr(0, fcb_arr[i], 0, 1) == DIR)? ' ':'d';
+      printf("%-20s\t%-8d\t%c\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET), get_file_attr(fs, fcb_arr[i], SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH), is_dir);
     }
     delete[] fcb_arr;
     delete[] size_arr;
-  }
-  else {
+    break;
+  case CD_P:
+    int raw_pd = get_file_attr(fs, gcwd, 0, 2);
+    gcwd = PARENT_DIR(raw_pd);
+    break;
+  default:
     printf("Invalid operation code [%d]\n", op);
+    break;
   }
 }
 
 __device__ void fs_gsys(FileSystem* fs, int op, char* s)
 {
   /* Implement rm operation here */
-  if (op != RM) {
-    printf("Invalid operation [%d].\n", op);
+  FCBQuery query = search_file(fs, s);
+  if (query.FCB_index == FP_INVALID && op != MKDIR) {
+    printf("No file named %s");
     return;
   }
-  FCBQuery query = search_file(fs, s);
-  if (query.FCB_index == -1) {
-    printf("No file named %s to delete.\n", s);
+  switch (op) {
+  case RM:
+    if (get_file_attr(fs, query.FCB_index, 0, 1) == DIR) {
+      printf("Cannot delete a directory using RM,\n");
+      return;
+    }
+    vcb_set(fs, query.FCB_index, 0);
+    set_file_attr(fs, query.FCB_index, 0, 1, FCB_INVALID);
+    gfilenum--;
+    break;
+  case RM_RF:
+    if (get_file_attr(fs, query.FCB_index, 0, 1) != DIR) {
+      printf("Cannot delete a file using RM_RF.\n");
+      return;
+    }
+    else if (query.FCB_index == 0) {
+      printf("Cannot remove root directory.\n");
+      return;
+    }
+    break;
+  case CD:
+    if (get_file_attr(fs, query.FCB_index, 0, 1) != DIR) {
+      printf("Cannot CD into a file.\n");
+    }
+    gcwd = query.FCB_index;
+    break;
+  default:
+    printf("Invalid operation code [%d]\n", op);
   }
-  vcb_set(fs, query.FCB_index, 0);
-  set_file_attr(fs, query.FCB_index, 0, 1, FCB_INVALID);
-  gfilenum--;
 }
 
 __device__ void fs_diagnose(FileSystem* fs, u32 fp) {
