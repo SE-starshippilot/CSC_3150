@@ -116,6 +116,18 @@ __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_
   memset(fs->volume + fs->SUPERBLOCK_SIZE + fp * fs->FCB_SIZE + attr_offset + attr_length, 0, 1);
 }
 
+__device__ void append_parent_content(FileSystem* fs, char* s){
+    int parent_fp = gcwd;
+    int new_filename_length = str_len(s);
+    char* orgn_parent_content = get_file_attr(fs, parent_fp, NAME_ATTR_OFFSET);
+    int orgn_parent_content_length = str_len(orgn_parent_content);
+    char* new_parent_content = new char[orgn_parent_content_length + new_filename_length];
+    memcpy(orgn_parent_content, new_parent_content, orgn_parent_content_length);
+    memcpy(s, new_parent_content + orgn_parent_content_length, new_filename_length);
+    set_file_attr(fs, parent_fp, NAME_ATTR_OFFSET, new_parent_content); // update the content
+    fs_write(fs, (uchar*) new_parent_content, orgn_parent_content_length + new_filename_length, (parent_fp>>1)+1); // update name info
+}
+
 __device__ void recursive_set_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length, int value){
   set_file_attr(fs, fp, attr_offset, attr_length, value);
   if (fp){
@@ -294,11 +306,14 @@ __device__ u32 fs_open(FileSystem* fs, char* s, int op)
       }
       else {
         ret_val = query.empty_index;
-        set_file_attr(fs, query.empty_index, 0, 1, FCB_VALID);
+        int parent_fp = gcwd;
+        int new_file_misc = (FCB_VALID << 8) + parent_fp;
+        append_parent_content(fs, s);
+        set_file_attr(fs, query.empty_index, 0, MISC_ATTR_LENGTH, new_file_misc);
         set_file_attr(fs, query.empty_index, NAME_ATTR_OFFSET, file_name_length, s); // set file name
         set_file_attr(fs, query.empty_index, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, 0); // set file size
         set_file_attr(fs, query.empty_index, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH, gtime); // set create time
-        set_file_attr(fs, query.empty_index, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime); // set modify time
+        recursive_set_file_attr(fs, query.empty_index, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime); // set modify time
         gtime++;
         gfilenum++;
       }
@@ -547,23 +562,13 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
       printf("Cannot create more directoryes.\n");
       return;
     }
-    int parent_fp = gcwd;
     int new_fcb = query.empty_index;
-    int new_filename_length = str_len(s);
-    int raw_dir_info = get_file_attr(fs, parent_fp, 0, 1);
     int new_dir_level = glevel + 1;
-    int new_misc_info = (DIR<<8) + parent_fp;
-    char* orgn_parent_content = get_file_attr(fs, parent_fp, NAME_ATTR_OFFSET);
-    int orgn_parent_content_length = str_len(orgn_parent_content);
-    char* new_parent_content = new char[orgn_parent_content_length + new_filename_length];
-    memcpy(orgn_parent_content, new_parent_content, orgn_parent_content_length);
-    memcpy(s, new_parent_content + orgn_parent_content_length, new_filename_length);
-    new_parent_content = get_file_attr(fs, parent_fp, NAME_ATTR_OFFSET);
-    fs_write(fs, (uchar*) new_parent_content, orgn_parent_content_length + new_filename_length, (parent_fp>>1)+1);
+    append_parent_content(fs, s);
+    int new_misc_info = (DIR<<8) + gcwd;
     set_file_attr(fs, new_fcb, 0, MISC_ATTR_LENGTH, new_misc_info);
     set_file_attr(fs, new_fcb, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH, gtime);
     recursive_set_file_attr(fs, new_fcb, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime);
-    delete [] new_parent_content;
     gfilenum++;
     gtime++;
     break;

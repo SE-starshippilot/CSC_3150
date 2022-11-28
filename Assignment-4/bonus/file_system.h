@@ -59,6 +59,7 @@ __device__ char* get_file_attr(FileSystem* fs, u32 fp, int attr_offset);
 __device__ int get_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length);
 __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, char* value);
 __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length, int value);
+__device__ void update_parent_attr(FileSystem* fs, char* s);
 __device__ FCBQuery search_file(FileSystem* fs, char* s);
 __device__ u32 get_file_base_addr(FileSystem* fs, u32 fp);
 __device__ u32 get_block_idx(FileSystem* fs, u32 addr);
