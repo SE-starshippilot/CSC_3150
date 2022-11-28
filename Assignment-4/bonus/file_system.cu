@@ -68,6 +68,7 @@ __device__ void fs_init(FileSystem* fs, uchar* volume, int SUPERBLOCK_SIZE,
   fcb_init(fs);
 
   // create the fcb for root directory
+  fs_gsys(fs, MKDIR, ".\0");
 }
 
 __device__ int str_cmp(char* str1, char* str2) {
@@ -578,11 +579,24 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
 }
 
 __device__ void fs_diagnose(FileSystem* fs, u32 fp) {
+  printf("===File System Diagnose===\n");
+  int fcb_status = get_file_attr(fs, fp, 0, 1);
+  if (fcb_status == FCB_INVALID) {
+    printf("FCB entry is invalid.\n");
+    return;
+  }
+  char is_file = (fcb_status == DIR)? 'd' : 'f';
   char* file_name = get_file_attr(fs, fp, NAME_ATTR_OFFSET);
   short file_modtime = get_file_attr(fs, fp, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
   int file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
-  short file_createtime = get_file_attr(fs, fp, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH);
-  short file_startblock = get_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
-  int file_endblock = get_file_end_block(fs, fp);
-  printf("FCB Index:%-4d\tFile name:%-20s\tSize:%-10d\tStarts on block:%-5d\tEnds on block:%-5d\tTime created:%-5d\tTime modified:%-5d\n", fp, file_name, file_size, file_startblock, file_endblock, file_createtime, file_modtime);
+  int file_createtime = get_file_attr(fs, fp, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH);
+  short file_startblock, file_endblock;
+  if (file_size){
+    file_startblock = get_file_attr(fs, fp, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
+    file_endblock = get_file_end_block(fs, fp);
+  } else {
+    file_startblock = -1;
+    file_endblock = -1;
+  }
+  printf("FCB Index:%-4d\tFile name:%-20s\tType:%c\tSize:%-10d\tStarts on block:%-5d\tEnds on block:%-5d\tTime created:%-5d\tTime modified:%-5d\n", fp, file_name, is_file, file_size, file_startblock, file_endblock, file_createtime, file_modtime);
 }
