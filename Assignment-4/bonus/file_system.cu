@@ -401,7 +401,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     }
     printf("===sort by modified time===\n");
     for (int i = 0; i < gfilenum; i++) {
-      char is_dir = (get_file_attr(0, fcb_arr[i], 0, 1) == DIR)? ' ':'d';
+      char is_dir = (get_file_attr(0, fcb_arr[i], 0, 1) == DIR) ? ' ' : 'd';
       printf("%-20s\t%c\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET), modtime_arr[i], is_dir);
     }
     delete[] fcb_arr;
@@ -438,7 +438,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     }
     printf("===sort by file size===\n");
     for (int i = 0; i < gfilenum; i++) {
-      char is_dir = (get_file_attr(0, fcb_arr[i], 0, 1) == DIR)? ' ':'d';
+      char is_dir = (get_file_attr(0, fcb_arr[i], 0, 1) == DIR) ? ' ' : 'd';
       printf("%-20s\t%-8d\t%c\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET), get_file_attr(fs, fcb_arr[i], SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH), is_dir);
     }
     delete[] fcb_arr;
@@ -447,6 +447,10 @@ __device__ void fs_gsys(FileSystem* fs, int op)
   case CD_P:
     int raw_pd = get_file_attr(fs, gcwd, 0, 2);
     gcwd = PARENT_DIR(raw_pd);
+    break;
+  case PWD:
+    int tcwd = gcwd;
+
     break;
   default:
     printf("Invalid operation code [%d]\n", op);
@@ -481,6 +485,25 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
       printf("Cannot remove root directory.\n");
       return;
     }
+    int dir_size = get_file_attr(fs, query.FCB_index, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH), read_size = 0;
+    uchar* dir_content = new uchar[dir_size];
+    fs_read(fs, dir_content, dir_size, query.empty_index << 1);
+    while (read_size != dir_size) {
+      char* t_name = (char*)dir_content;
+      FCBQuery t_query = search_file(fs, t_name);
+      int t_fp = t_query.FCB_index;
+      if (get_file_attr(fs, t_fp, 0, 1) == DIR) {
+        fs_gsys(fs, RM_RF, t_name); // recursively remove all the files within the directory
+      }
+      else {
+        fs_gsys(fs, RM, t_name);
+      }
+      read_size += str_len(t_name);
+    }
+    vcb_set(fs, query.FCB_index, 0); // clear vcb bits
+    set_file_attr(fs, query.FCB_index, 0, 1, FCB_INVALID); // invalidate fcb entry
+    gfilenum--; // decrease file numbers
+    delete[] dir_content;
     break;
   case CD:
     if (get_file_attr(fs, query.FCB_index, 0, 1) != DIR) {
