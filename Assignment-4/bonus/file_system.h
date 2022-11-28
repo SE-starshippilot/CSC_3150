@@ -48,7 +48,8 @@ __device__ void fs_gsys(FileSystem *fs, int op, char *s);
 /* Self-defined function prototypes */
 __device__ void fcb_init(FileSystem* fs);
 __device__ void superblock_init(FileSystem* fs);
-__device__ int is_same_str(char* str1, char* str2);
+__device__ int str_cmp(char* str1, char* str2);
+__device__ int str_len(const char* str);
 __device__ char* get_file_attr(FileSystem* fs, u32 fp, int attr_offset);
 __device__ int get_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length);
 __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, char* value);
@@ -62,4 +63,5 @@ __device__ int has_enough_space(FileSystem* fs, int block_size);
 __device__ int move_file(FileSystem* fs, u32 fp, int new_start_block_idx);
 __device__ int fs_compress(FileSystem* fs);
 __device__ u32 fs_allocate(FileSystem* fs, int block_num);
+__device__ void fs_diagnose(FileSystem* fs, u32 fp);
 #endif
