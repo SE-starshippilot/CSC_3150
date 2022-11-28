@@ -450,7 +450,18 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     break;
   case PWD:
     int tcwd = gcwd;
-
+    int tinfo = get_file_attr(fs, tcwd, 0, 1);
+    int tlevel = DIR_LEVEL(tinfo);
+    int* working_dir = new int[tlevel];
+    for (int i = 0; i < tlevel; i++) {
+      working_dir[i] = tcwd;
+      int tparent = get_file_attr(fs, tcwd, 0, PARDIR_ATTR_LENGTH);
+      tcwd = PARENT_DIR(tparent);
+    }
+    for (int i = tlevel - 1; i >= 0; i--)
+      printf("/%s", get_file_attr(fs, working_dir[i], NAME_ATTR_OFFSET));
+    printf("\n");
+    delete[] working_dir;
     break;
   default:
     printf("Invalid operation code [%d]\n", op);
