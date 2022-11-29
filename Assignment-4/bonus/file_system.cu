@@ -408,6 +408,11 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     char* cwd_conent = new char[cwd_size];
     fs_read(fs, (uchar*)cwd_conent, cwd_size, gcwd);
     count_cwd_filenum(fs, cwd_conent, &cwd_file_count, cwd_size);
+    if (cwd_file_count == 0) {
+      printf("===Sort %d files by modified time===\n", cwd_file_count);
+      break;
+    }
+
     int* fcb_arr = new int[cwd_file_count];
     int* modtime_arr = new int[cwd_file_count];
     int bytes_traversed = 0;
@@ -452,6 +457,10 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     char* cwd_conent = new char[cwd_size];
     fs_read(fs, (uchar*)cwd_conent, cwd_size, gcwd);
     count_cwd_filenum(fs, cwd_conent, &cwd_file_count, cwd_size);
+    if (cwd_file_count == 0) {
+      printf("===Sort %d files by size===\n", cwd_file_count);
+      break;
+    }
     int* fcb_arr = new int[cwd_file_count];
     int* size_arr = new int[cwd_file_count];
     int bytes_traversed = 0;
@@ -502,14 +511,14 @@ __device__ void fs_gsys(FileSystem* fs, int op)
   {
     int tcwd = gcwd;
     int tlevel = glevel;
-    int* working_dir = new int[tlevel];
-    for (int i = 0; i < tlevel; i++) {
+    int* working_dir = new int[tlevel - 1];
+    for (int i = 0; i < tlevel - 1; i++) {
       working_dir[i] = tcwd;
       int tparent = get_file_attr(fs, tcwd, 0, PARDIR_ATTR_LENGTH);
       tcwd = FORMAT_PARENT_FP(tparent);
     }
-    for (int i = tlevel; i > 1; i--)
-      printf("/%s", get_file_attr(fs, working_dir[i], NAME_ATTR_OFFSET));
+    for (int i = tlevel - 1; i > 0; i--)
+      printf("/%s", get_file_attr(fs, working_dir[i-1], NAME_ATTR_OFFSET));
     printf("\n");
     delete[] working_dir;
     break;
@@ -613,7 +622,7 @@ __device__ void file_diagnose(FileSystem* fs, u32 fp) {
     printf("Index:%-4d: invalid.\n", fp);
     return;
   }
-  char is_file = ((fcb_status & 0x4000)>>14) ? 'd' : 'f';
+  char is_file = ((fcb_status & 0x4000) >> 14) ? 'd' : 'f';
   int parent_fcb = fcb_status & 0x3fff;
   char* parent_name = get_file_attr(fs, parent_fcb, NAME_ATTR_OFFSET);
   char* file_name = get_file_attr(fs, fp, NAME_ATTR_OFFSET);
