@@ -121,7 +121,7 @@ __device__ void append_parent_content(FileSystem* fs, char* s) {
   int orgn_parent_size = get_file_attr(fs, parent_fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
   char* new_parent_content = new char[orgn_parent_size + new_filename_length + 1];
   if (orgn_parent_size) {
-    fs_read(fs, (uchar*)new_parent_content, orgn_parent_size, parent_fp);
+    fs_read(fs, (uchar*)new_parent_content, orgn_parent_size, (parent_fp << 1) + G_READ);
   }
   memcpy(new_parent_content + orgn_parent_size, s, new_filename_length);
   memset(new_parent_content + orgn_parent_size + new_filename_length, 0, 1);
@@ -407,7 +407,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     int cwd_file_count = 0;
     int cwd_size = get_file_attr(fs, gcwd, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
     char* cwd_conent = new char[cwd_size];
-    fs_read(fs, (uchar*)cwd_conent, cwd_size, gcwd);
+    fs_read(fs, (uchar*)cwd_conent, cwd_size, (gcwd<<1) + G_READ);
     count_cwd_filenum(fs, cwd_conent, &cwd_file_count, cwd_size);
     if (cwd_file_count == 0) {
       printf("===Sort %d files by modified time===\n", cwd_file_count);
@@ -456,7 +456,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     int cwd_file_count = 0;
     int cwd_size = get_file_attr(fs, gcwd, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
     char* cwd_conent = new char[cwd_size];
-    fs_read(fs, (uchar*)cwd_conent, cwd_size, gcwd);
+    fs_read(fs, (uchar*)cwd_conent, cwd_size, (gcwd<<1) + G_READ);
     count_cwd_filenum(fs, cwd_conent, &cwd_file_count, cwd_size);
     if (cwd_file_count == 0) {
       printf("===Sort %d files by size===\n", cwd_file_count);
