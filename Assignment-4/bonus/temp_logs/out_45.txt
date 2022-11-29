@@ -1,0 +1,70 @@
+===Sort 2 files by modified time===
+t.txt               	4       	 
+b.txt               	3       	 
+===Sort 2 files by size===
+t.txt               	32      	 
+b.txt               	32      	 
+===Sort 3 files by modified time===
+app                 	5       	d
+t.txt               	4       	 
+b.txt               	3       	 
+===Sort 3 files by size===
+t.txt               	32      	 
+b.txt               	32      	 
+app                 	0       	d
+===Sort 0 files by size===
+===Sort 3 files by size===
+a.txt               	64      	 
+b.txt               	32      	 
+soft                	0       	d
+===Sort 3 files by modified time===
+soft                	10      	d
+b.txt               	9       	 
+a.txt               	7       	 
+/app/soft
+===Sort 4 files by size===
+B.txt               	1024    	 
+C.txt               	1024    	 
+D.txt               	1024    	 
+A.txt               	64      	 
+===File System Diagnose===
+Current system time:19
+Current file  count:11
+Current working dir:/app/soft
+Index:0   	File name:.                   	Type:d	Parent:.                   	Size:16        	Start block:0    	End block:0    	Time created:0    	Time modified:9    
+Index:1   	File name:t.txt               	Type:f	Parent:.                   	Size:32        	Start block:1    	End block:1    	Time created:0    	Time modified:4    
+Index:2   	File name:b.txt               	Type:f	Parent:.                   	Size:32        	Start block:3    	End block:3    	Time created:2    	Time modified:3    
+Index:3   	File name:app                 	Type:d	Parent:.                   	Size:17        	Start block:4    	End block:4    	Time created:5    	Time modified:16   
+Index:4   	File name:a.txt               	Type:f	Parent:app                 	Size:64        	Start block:5    	End block:6    	Time created:6    	Time modified:7    
+Index:5   	File name:b.txt               	Type:f	Parent:app                 	Size:32        	Start block:7    	End block:7    	Time created:8    	Time modified:9    
+Index:6   	File name:soft                	Type:d	Parent:app                 	Size:24        	Start block:8    	End block:8    	Time created:10   	Time modified:18   
+Index:7   	File name:A.txt               	Type:f	Parent:soft                	Size:64        	Start block:9    	End block:10   	Time created:11   	Time modified:12   
+Index:8   	File name:B.txt               	Type:f	Parent:soft                	Size:1024      	Start block:11   	End block:42   	Time created:13   	Time modified:14   
+Index:9   	File name:C.txt               	Type:f	Parent:soft                	Size:1024      	Start block:43   	End block:74   	Time created:15   	Time modified:16   
+Index:10  	File name:D.txt               	Type:f	Parent:soft                	Size:1024      	Start block:75   	End block:106  	Time created:17   	Time modified:18   
+==========================
+===Sort 3 files by size===
+a.txt               	64      	 
+b.txt               	32      	 
+soft                	24      	d
+/app
+===Sort 3 files by size===
+t.txt               	32      	 
+b.txt               	32      	 
+app                 	17      	d
+===File System Diagnose===
+Current system time:19
+Current file  count:11
+Current working dir:
+Index:0   	File name:.                   	Type:d	Parent:.                   	Size:16        	Start block:0    	End block:0    	Time created:0    	Time modified:9    
+Index:1   	File name:t.txt               	Type:f	Parent:.                   	Size:32        	Start block:1    	End block:1    	Time created:0    	Time modified:4    
+Index:2   	File name:b.txt               	Type:f	Parent:.                   	Size:32        	Start block:3    	End block:3    	Time created:2    	Time modified:3    
+Index:3   	File name:app                 	Type:d	Parent:.                   	Size:17        	Start block:4    	End block:4    	Time created:5    	Time modified:16   
+Index:4   	File name:a.txt               	Type:f	Parent:app                 	Size:64        	Start block:5    	End block:6    	Time created:6    	Time modified:7    
+Index:5   	File name:b.txt               	Type:f	Parent:app                 	Size:32        	Start block:7    	End block:7    	Time created:8    	Time modified:9    
+Index:6   	File name:soft                	Type:d	Parent:app                 	Size:24        	Start block:8    	End block:8    	Time created:10   	Time modified:18   
+Index:7   	File name:A.txt               	Type:f	Parent:soft                	Size:64        	Start block:9    	End block:10   	Time created:11   	Time modified:12   
+Index:8   	File name:B.txt               	Type:f	Parent:soft                	Size:1024      	Start block:11   	End block:42   	Time created:13   	Time modified:14   
+Index:9   	File name:C.txt               	Type:f	Parent:soft                	Size:1024      	Start block:43   	End block:74   	Time created:15   	Time modified:16   
+Index:10  	File name:D.txt               	Type:f	Parent:soft                	Size:1024      	Start block:75   	End block:106  	Time created:17   	Time modified:18   
+==========================
