@@ -17,21 +17,22 @@
 #define PARDIR_ATTR_LENGTH 2
 #define SIZE_ATTR_LENGTH 4
 #define MISC_ATTR_LENGTH 2
-#define FCB_VALID 0x80
-#define FCB_INVALID 0x00
-#define DIR 0xc0
+#define FILE 0x8000
+#define FCB_INVALID 0x0000
+#define DIR 0xc000
 #define FP_INVALID 1024
+#define FILE_STATUS(x) x&0xc000
 #define FORMAT_PARENT_FP(x) x&0x03ff
 
 __device__ __managed__ u32 gtime = 0;       // increasing. larger means newer
 __device__ __managed__ u32 gfilenum = 0;    // number of files present in the file system
 __device__ __managed__ u32 glastblock = 0;  // used in next-fit algorithm
 __device__ __managed__ u32 gcwd = 0;        // current working directory. Default is root. root directory is always at fcb#0
-__device__ __managed__ u32 glevel = 0;      // the root directory is at level 0, maxmimum level is 3.
+__device__ __managed__ u32 glevel = 1;      // the root directory is at level 0, maxmimum level is 3.
 
 __device__ void fcb_init(FileSystem* fs) {
   for (u32 i = 0; i < fs->FCB_ENTRIES; i++) {
-    set_file_attr(fs, i, 0, 1, FCB_INVALID);// MSB in the first byte of FCB is valid bit. 0 indicates invalid.
+    set_file_attr(fs, i, 0, MISC_ATTR_LENGTH, FCB_INVALID);// MSB in the first byte of FCB is valid bit. 0 indicates invalid.
   }
 }
 
@@ -115,23 +116,26 @@ __device__ void set_file_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_
 
 __device__ void append_parent_content(FileSystem* fs, char* s) {
   int parent_fp = gcwd;
+  if (str_cmp(s, ".\0")) return;
   int new_filename_length = str_len(s);
-  char* orgn_parent_content = get_file_attr(fs, parent_fp, NAME_ATTR_OFFSET);
-  int orgn_parent_content_length = str_len(orgn_parent_content);
-  char* new_parent_content = new char[orgn_parent_content_length + new_filename_length];
-  memcpy(orgn_parent_content, new_parent_content, orgn_parent_content_length);
-  memcpy(s, new_parent_content + orgn_parent_content_length, new_filename_length);
-  set_file_attr(fs, parent_fp, NAME_ATTR_OFFSET, new_filename_length, new_parent_content); // update the content
-  fs_write(fs, (uchar*)new_parent_content, orgn_parent_content_length + new_filename_length, (parent_fp >> 1) + 1); // update name info
+  int orgn_parent_size = get_file_attr(fs, parent_fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+  char* new_parent_content = new char[orgn_parent_size + new_filename_length + 1];
+  if (orgn_parent_size){
+    fs_read(fs, (uchar*) new_parent_content, orgn_parent_size, parent_fp);
+  }
+  memcpy(new_parent_content + orgn_parent_size, s, new_filename_length);
+  memset(new_parent_content + orgn_parent_size + new_filename_length, 0, 1);
+  fs_write(fs, (uchar*)new_parent_content, orgn_parent_size + new_filename_length + 1, (parent_fp >> 1) + 1); // update name info
+  delete [] new_parent_content;
 }
 
 __device__ void set_all_parents_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length, int value) {
   int raw_parent_fp, parent_fp;
   while(true){
+    set_file_attr(fs, fp, attr_offset, attr_length, value);
+    if (fp == 0) break;
     raw_parent_fp = get_file_attr(fs, fp, 0, PARDIR_ATTR_LENGTH);
     parent_fp = FORMAT_PARENT_FP(raw_parent_fp);
-    if (parent_fp == 0) break;
-    set_file_attr(fs, parent_fp, attr_offset, attr_length, value);
     fp = parent_fp;
   }
 }
@@ -143,7 +147,8 @@ __device__ FCBQuery search_file(FileSystem* fs, char* s) {
   FCBQuery ret_val = { FP_INVALID, FP_INVALID };
   int valid_fcb_traversed = 0;
   for (u32 i = 0; i < fs->FCB_ENTRIES; i++) {
-    if (get_file_attr(fs, i, 0, 1) == FCB_VALID) { // valid bit is set
+    int file_status = get_file_attr(fs, i, 0, MISC_ATTR_LENGTH);
+    if (file_status>>15) { // valid bit is set
       valid_fcb_traversed++;
       if (str_cmp(s, get_file_attr(fs, i, NAME_ATTR_OFFSET))) {
         ret_val.FCB_index = i;
@@ -221,7 +226,7 @@ __device__ int fs_compress(FileSystem* fs) {
   u32* startblk_arr = new u32[gfilenum];
   int files_found = 0;
   for (int i = 0; i < fs->FCB_ENTRIES; i++) {
-    if (get_file_attr(fs, i, 0, 1) == FCB_VALID) {
+    if (get_file_attr(fs, i, 0, MISC_ATTR_LENGTH)>>15) {
       fcb_arr[files_found] = i;
       startblk_arr[files_found] = get_file_attr(fs, i, STARTBLK_ATTR_OFFSET, STARTBLK_ATTR_LENGTH);
       files_found++;
@@ -299,7 +304,7 @@ __device__ u32 fs_open(FileSystem* fs, char* s, int op)
       else {
         ret_val = query.empty_index;
         int parent_fp = gcwd;
-        int new_file_misc = (FCB_VALID << 8) + parent_fp;
+        int new_file_misc = FILE + parent_fp;
         append_parent_content(fs, s);
         set_file_attr(fs, query.empty_index, 0, MISC_ATTR_LENGTH, new_file_misc);
         set_file_attr(fs, query.empty_index, NAME_ATTR_OFFSET, file_name_length, s); // set file name
@@ -327,10 +332,6 @@ __device__ void fs_read(FileSystem* fs, uchar* output, u32 size, u32 fp)
     printf("File not found.\n");
     return;
   }
-  if (get_file_attr(fs, fp, 0, 1) == DIR) {
-    printf("Cannot read a directory.\n");
-    return;
-  }
   int file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
   if (size > file_size) {
     printf("Read size exceeds file size.\n");
@@ -348,10 +349,6 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
   fp >>= 1;
   if (fp == fs->FCB_ENTRIES || mode != G_WRITE) {
     printf("Invalid fp.\n");
-    return 1;
-  }
-  if (get_file_attr(fs, fp, 0, 1) == DIR) {
-    printf("Cannot write to directory.\n");
     return 1;
   }
   u32 orgn_file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
@@ -400,7 +397,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     int* modtime_arr = new int[gfilenum];
     int files_found = 0;
     for (int i = 0; i < fs->FCB_ENTRIES; i++) {
-      if (get_file_attr(fs, i, 0, 1) == FCB_VALID) {
+      if (get_file_attr(fs, i, 0, MISC_ATTR_LENGTH)>>15) {
         fcb_arr[files_found] = i;
         modtime_arr[files_found] = get_file_attr(fs, i, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
         files_found++;
@@ -424,8 +421,9 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     }
     printf("===sort by modified time===\n");
     for (int i = 0; i < gfilenum; i++) {
-      char is_dir = (get_file_attr(0, fcb_arr[i], 0, 1) == DIR) ? ' ' : 'd';
-      printf("%-20s\t%c\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET), modtime_arr[i], is_dir);
+      int file_status = get_file_attr(fs, fcb_arr[i], 0, MISC_ATTR_LENGTH);
+      char is_dir = (file_status&0x4000) ? 'd' : ' ';
+      printf("%-20s\t%c\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET), is_dir);
     }
     delete[] fcb_arr;
     delete[] modtime_arr;
@@ -437,7 +435,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     int* size_arr = new int[gfilenum];
     int files_found = 0;
     for (int i = 0; i < fs->FCB_ENTRIES; i++) {
-      if (get_file_attr(fs, i, 0, 1) == FCB_VALID) {
+      if (get_file_attr(fs, i, 0, MISC_ATTR_LENGTH) >> 15) {
         fcb_arr[files_found] = i;
         size_arr[files_found] = get_file_attr(fs, i, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
         files_found++;
@@ -463,7 +461,8 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     }
     printf("===sort by file size===\n");
     for (int i = 0; i < gfilenum; i++) {
-      char is_dir = (get_file_attr(0, fcb_arr[i], 0, 1) == DIR) ? ' ' : 'd';
+      int file_status = get_file_attr(fs, fcb_arr[i], 0, MISC_ATTR_LENGTH);
+      char is_dir = (file_status&0x4000) ? 'd' : ' ';
       printf("%-20s\t%-8d\t%c\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET), get_file_attr(fs, fcb_arr[i], SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH), is_dir);
     }
     delete[] fcb_arr;
@@ -480,7 +479,6 @@ __device__ void fs_gsys(FileSystem* fs, int op)
   case PWD:
   {
     int tcwd = gcwd;
-    int tinfo = get_file_attr(fs, tcwd, 0, 1);
     int tlevel = glevel;
     int* working_dir = new int[tlevel];
     for (int i = 0; i < tlevel; i++) {
@@ -488,7 +486,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       int tparent = get_file_attr(fs, tcwd, 0, PARDIR_ATTR_LENGTH);
       tcwd = FORMAT_PARENT_FP(tparent);
     }
-    for (int i = tlevel - 1; i >= 0; i--)
+    for (int i = tlevel - 1; i > 0; i--)
       printf("/%s", get_file_attr(fs, working_dir[i], NAME_ATTR_OFFSET));
     printf("\n");
     delete[] working_dir;
@@ -517,17 +515,17 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
   switch (op) {
   case RM:
   {
-    if (get_file_attr(fs, query.FCB_index, 0, 1) == DIR) {
+    if (FILE_STATUS(get_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH)) == DIR) {
       printf("Cannot delete a directory using RM,\n");
       return;
     }
     vcb_set(fs, query.FCB_index, 0);
-    set_file_attr(fs, query.FCB_index, 0, 1, FCB_INVALID);
+    set_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH, FCB_INVALID);
     gfilenum--;
     break;
   }
   case RM_RF:
-  {if (get_file_attr(fs, query.FCB_index, 0, 1) != DIR) {
+  {if (FILE_STATUS(get_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH)) != DIR) {
     printf("Cannot delete a file using RM_RF.\n");
     return;
   }
@@ -542,7 +540,7 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
     char* t_name = (char*)dir_content;
     FCBQuery t_query = search_file(fs, t_name);
     int t_fp = t_query.FCB_index;
-    if (get_file_attr(fs, t_fp, 0, 1) == DIR) {
+    if (FILE_STATUS(get_file_attr(fs, t_fp, 0, MISC_ATTR_LENGTH)) == DIR) {
       fs_gsys(fs, RM_RF, t_name); // recursively remove all the files within the directory
     }
     else {
@@ -551,14 +549,14 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
     read_size += str_len(t_name);
   }
   vcb_set(fs, query.FCB_index, 0); // clear vcb bits
-  set_file_attr(fs, query.FCB_index, 0, 1, FCB_INVALID); // invalidate fcb entry
+  set_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH, FCB_INVALID); // invalidate fcb entry
   gfilenum--; // decrease file numbers
   delete[] dir_content;
   break;
   }
   case CD:
   {
-    if (get_file_attr(fs, query.FCB_index, 0, 1) != DIR) {
+    if (FILE_STATUS(get_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH)) != DIR) {
       printf("Cannot CD into a file.\n");
     }
     gcwd = query.FCB_index;
@@ -571,8 +569,10 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
     }
     int new_fcb = query.empty_index;
     append_parent_content(fs, s);
-    int new_misc_info = (DIR << 8) + gcwd;
+    int new_misc_info = DIR + gcwd;
+    set_file_attr(fs, new_fcb, NAME_ATTR_OFFSET, str_len(s), s);
     set_file_attr(fs, new_fcb, 0, MISC_ATTR_LENGTH, new_misc_info);
+    set_file_attr(fs, new_fcb, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, 0);
     set_file_attr(fs, new_fcb, CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH, gtime);
     set_all_parents_attr(fs, new_fcb, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime);
     gfilenum++;
@@ -581,14 +581,14 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
   }
   default:
     printf("Invalid operation code [%d]\n", op);
+    break;
   }
 }
 
-__device__ void fs_diagnose(FileSystem* fs, u32 fp) {
-  printf("===File System Diagnose===\n");
-  int fcb_status = get_file_attr(fs, fp, 0, 1);
+__device__ void file_diagnose(FileSystem* fs, u32 fp) {
+  int fcb_status =get_file_attr(fs, fp, 0, MISC_ATTR_LENGTH) & 0xc000;
   if (fcb_status == FCB_INVALID) {
-    printf("FCB entry is invalid.\n");
+    printf("Index:%-4d: invalid.\n", fp);
     return;
   }
   char is_file = (fcb_status == DIR) ? 'd' : 'f';
@@ -605,5 +605,16 @@ __device__ void fs_diagnose(FileSystem* fs, u32 fp) {
     file_startblock = -1;
     file_endblock = -1;
   }
-  printf("FCB Index:%-4d\tFile name:%-20s\tType:%c\tSize:%-10d\tStarts on block:%-5d\tEnds on block:%-5d\tTime created:%-5d\tTime modified:%-5d\n", fp, file_name, is_file, file_size, file_startblock, file_endblock, file_createtime, file_modtime);
+  printf("Index:%-4d\tFile name:%-20s\tType:%c\tSize:%-10d\tStarts on block:%-5d\tEnds on block:%-5d\tTime created:%-5d\tTime modified:%-5d\n", fp, file_name, is_file, file_size, file_startblock, file_endblock, file_createtime, file_modtime);
+}
+
+__device__ void fs_diagnose(FileSystem* fs){
+  printf("===File System Diagnose===\n");
+  printf("Current system time:%d\n", gtime);
+  printf("Current file  count:%d\n", gfilenum);
+  printf("Current working dir:\n");
+  fs_gsys(fs, PWD);
+  for (int i=0; i<fs->FCB_ENTRIES; i++){
+    file_diagnose(fs, i);
+  }
 }

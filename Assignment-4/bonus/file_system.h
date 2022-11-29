@@ -65,5 +65,6 @@ __device__ void vcb_set(FileSystem* fs, int fp, int val);
 __device__ int move_file(FileSystem* fs, u32 fp, int new_start_block_idx);
 __device__ int fs_compress(FileSystem* fs);
 __device__ u32 fs_allocate(FileSystem* fs, int block_num);
-__device__ void fs_diagnose(FileSystem* fs, u32 fp);
+__device__ void fs_diagnose(FileSystem* fs);
+__device__ void file_diagnose(FileSystem* fs, u32 fp);
 #endif
