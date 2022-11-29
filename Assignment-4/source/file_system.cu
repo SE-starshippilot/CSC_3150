@@ -175,23 +175,6 @@ __device__ void vcb_set(FileSystem* fs, int fp, int val) {
   }
 }
 
-__device__ int count_occupied_blocks(int VCB_Byte) {
-  int count = 0;
-  while (VCB_Byte) {
-    count++;
-    VCB_Byte &= VCB_Byte - 1;
-  }
-  return count;
-}
-
-__device__ int has_enough_space(FileSystem* fs, int block_size) {
-  /* Check if there is enough space to put $block_size blocks*/
-  int used_blocks = 0;
-  for (int i = 0; i < fs->SUPERBLOCK_SIZE; i++)
-    used_blocks += count_occupied_blocks(fs->volume[i]);
-  return fs->SUPERBLOCK_SIZE * 8 - used_blocks >= block_size;
-}
-
 __device__ int move_file(FileSystem* fs, u32 fp, int new_start_block_idx) {
   /* move file and return the next vacant block id after moving the file*/
   u32 old_file_base_addr = get_file_base_addr(fs, fp);
@@ -334,7 +317,7 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
     return 1;
   }
   u32 orgn_file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
-  int orgn_pos_max_size = floor((float)orgn_file_size / fs->STORAGE_BLOCK_SIZE) * fs->STORAGE_BLOCK_SIZE; // the maximum size the previous location can hold 
+  int orgn_pos_max_size = ceil((float)orgn_file_size / fs->STORAGE_BLOCK_SIZE) * fs->STORAGE_BLOCK_SIZE; // the maximum size the previous location can hold 
   u32 new_file_start_block;
   if (size < orgn_file_size) { // If the new size is smaller than the original file, clear VCB and set according to new size
     vcb_set(fs, fp, 0); // clear the VCB bits
@@ -455,7 +438,7 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
     return;
   }
   FCBQuery query = search_file(fs, s);
-  if (query.FCB_index == -1) {
+  if (query.FCB_index == FP_INVALID) {
     printf("No file named %s to delete.\n", s);
   }
   vcb_set(fs, query.FCB_index, 0);

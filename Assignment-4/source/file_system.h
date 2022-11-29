@@ -58,8 +58,6 @@ __device__ FCBQuery search_file(FileSystem* fs, char* s);
 __device__ u32 get_file_base_addr(FileSystem* fs, u32 fp);
 __device__ u32 get_block_idx(FileSystem* fs, u32 addr);
 __device__ void vcb_set(FileSystem* fs, int fp, int val);
-__device__ int count_vacant_bits(int VCB_Byte);
-__device__ int has_enough_space(FileSystem* fs, int block_size);
 __device__ int move_file(FileSystem* fs, u32 fp, int new_start_block_idx);
 __device__ int fs_compress(FileSystem* fs);
 __device__ u32 fs_allocate(FileSystem* fs, int block_num);
