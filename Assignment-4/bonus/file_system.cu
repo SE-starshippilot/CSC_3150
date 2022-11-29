@@ -624,8 +624,6 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
     pop_parent_content(fs, s); // remove the directory from the parent directory
     gfilenum--; // decrease by 1 (deleting the directory itself)
     gtime++;
-    printf("Conducting fs_diagnose after removing all\n");
-    fs_diagnose(fs);
     delete[] dir_content;
     break;
   }
