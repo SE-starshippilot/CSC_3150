@@ -1,0 +1,47 @@
+===Sort 2 files by modified time===
+t.txt               	4       	 
+b.txt               	3       	 
+===Sort 2 files by size===
+t.txt               	32      	 
+b.txt               	32      	 
+===Sort 3 files by modified time===
+app                 	5       	d
+t.txt               	4       	 
+b.txt               	3       	 
+===Sort 3 files by size===
+t.txt               	32      	 
+b.txt               	32      	 
+app                 	0       	d
+===Sort 0 files by size===
+===File System Diagnose===
+Current system time:10
+Current file  count:6
+Current working dir:/app
+Index:0   	File name:.                   	Type:d	Parent:.                   	Size:16        	Start block:0    	End block:0    	Time created:0    	Time modified:7    
+Index:1   	File name:t.txt               	Type:f	Parent:.                   	Size:32        	Start block:1    	End block:1    	Time created:0    	Time modified:4    
+Index:2   	File name:b.txt               	Type:f	Parent:.                   	Size:32        	Start block:3    	End block:3    	Time created:2    	Time modified:3    
+Index:3   	File name:app                 	Type:d	Parent:.                   	Size:12        	Start block:4    	End block:4    	Time created:5    	Time modified:9    
+Index:4   	File name:a.txt               	Type:f	Parent:app                 	Size:64        	Start block:5    	End block:6    	Time created:6    	Time modified:7    
+Index:5   	File name:b.txt               	Type:f	Parent:app                 	Size:32        	Start block:7    	End block:7    	Time created:8    	Time modified:9    
+==========================
+===Sort 3 files by size===
+a.txt               	64      	 
+b.txt               	32      	 
+soft                	0       	d
+===Sort 3 files by modified time===
+soft                	10      	d
+b.txt               	9       	 
+a.txt               	7       	 
+/app/soft
+===File System Diagnose===
+Current system time:11
+Current file  count:7
+Current working dir:/app/soft
+Index:0   	File name:.                   	Type:d	Parent:.                   	Size:16        	Start block:0    	End block:0    	Time created:0    	Time modified:9    
+Index:1   	File name:t.txt               	Type:f	Parent:.                   	Size:32        	Start block:1    	End block:1    	Time created:0    	Time modified:4    
+Index:2   	File name:b.txt               	Type:f	Parent:.                   	Size:32        	Start block:3    	End block:3    	Time created:2    	Time modified:3    
+Index:3   	File name:app                 	Type:d	Parent:.                   	Size:17        	Start block:4    	End block:4    	Time created:5    	Time modified:10   
+Index:4   	File name:a.txt               	Type:f	Parent:app                 	Size:64        	Start block:5    	End block:6    	Time created:6    	Time modified:7    
+Index:5   	File name:b.txt               	Type:f	Parent:app                 	Size:32        	Start block:7    	End block:7    	Time created:8    	Time modified:9    
+Index:6   	File name:soft                	Type:d	Parent:app                 	Size:0         	Start block:-1   	End block:-1   	Time created:10   	Time modified:10   
+==========================
