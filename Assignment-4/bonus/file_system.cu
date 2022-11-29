@@ -486,7 +486,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       int tparent = get_file_attr(fs, tcwd, 0, PARDIR_ATTR_LENGTH);
       tcwd = FORMAT_PARENT_FP(tparent);
     }
-    for (int i = tlevel - 1; i > 0; i--)
+    for (int i = tlevel; i > 1; i--)
       printf("/%s", get_file_attr(fs, working_dir[i], NAME_ATTR_OFFSET));
     printf("\n");
     delete[] working_dir;
@@ -556,7 +556,7 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
   }
   case CD:
   {
-    if (FILE_STATUS(get_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH)) != DIR) {
+    if (get_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH)&0x4000 == 0) {
       printf("Cannot CD into a file.\n");
     }
     gcwd = query.FCB_index;
