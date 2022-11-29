@@ -134,6 +134,8 @@ __device__ void append_parent_content(FileSystem* fs, char* s) {
 __device__ void pop_parent_content(FileSystem* fs, char* s) {
   int parent_fp = gcwd;
   if (str_cmp(s, ".\0")) return;
+  int grandparent_fp = get_file_attr(fs, parent_fp, 0, MISC_ATTR_LENGTH) & 0x3fff;
+  int grandparent_modtime  = get_file_attr(fs, grandparent_fp, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
   int pop_filelength = str_len(s) + 1;
   int orgn_parent_size = get_file_attr(fs, parent_fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
   char* new_parent_content = new char[orgn_parent_size];
@@ -144,10 +146,9 @@ __device__ void pop_parent_content(FileSystem* fs, char* s) {
     if (str_cmp(tmp_char, s)) {
       memcpy(new_parent_content + bits_traversed, new_parent_content + bits_traversed + pop_filelength, orgn_parent_size - bits_traversed - pop_filelength);
       orgn_parent_size -= pop_filelength;
-      set_file_attr(fs, parent_fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, orgn_parent_size);
-      for (int i = 0; i < orgn_parent_size; i++) {
-        printf("Byte%d is %c\n", i, new_parent_content[i]);
-      }
+      // for (int i = 0; i < orgn_parent_size; i++) {
+      //   printf("Byte%d is %c\n", i, new_parent_content[i]);
+      // }
       break;
     }
     else {
@@ -155,6 +156,7 @@ __device__ void pop_parent_content(FileSystem* fs, char* s) {
     }
   }
   fs_write(fs, (uchar*)new_parent_content, orgn_parent_size, (parent_fp << 1) + G_WRITE); // update name info
+  set_file_parent_attr(fs, parent_fp, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, grandparent_modtime); // reset grandparent modification time.
   gtime--;
   delete[] new_parent_content;
 }
@@ -583,7 +585,6 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
     vcb_set(fs, query.FCB_index, 0);
     set_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH, FCB_INVALID);
     pop_parent_content(fs, s);
-    set_file_parent_attr(fs, query.FCB_index, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime);
     gfilenum--;
     gtime++;
     break;
@@ -599,13 +600,14 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
       printf("Cannot remove root directory.\n");
       return;
     }
-    int dir_size = get_file_attr(fs, query.FCB_index, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH), read_size = 0;
+    int dir_size = get_file_attr(fs, query.FCB_index, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH), bytes_traversed = 0;
     char* dir_content = new char[dir_size];
     fs_read(fs, (uchar*) dir_content, dir_size, (query.FCB_index << 1) + G_READ);
     fs_gsys(fs, CD, s); // cd into the directory
-    int bytes_traversed = 0;
-    while (read_size != dir_size) { // delete all files/subdirectories
+    while (bytes_traversed != dir_size) { // delete all files/subdirectories
       char* t_name = &dir_content[bytes_traversed];
+      printf("Conducting fs_diagnose before removing %s\n", t_name);
+      fs_diagnose(fs);
       FCBQuery t_query = search_file(fs, t_name);
       int t_fp = t_query.FCB_index;
       int file_status = get_file_attr(fs, t_fp, 0, MISC_ATTR_LENGTH);
@@ -615,9 +617,12 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
       else {
         fs_gsys(fs, RM, t_name);
       }
-      read_size += str_len(t_name);
       bytes_traversed += str_len(t_name)+1;
+      printf("Conducting fs_diagnose after removing %s\n", t_name);
+      fs_diagnose(fs);
     }
+    printf("Conducting fs_diagnose after removing all\n");
+    fs_diagnose(fs);
     fs_gsys(fs, CD_P); // cd back to the parent directory
     vcb_set(fs, query.FCB_index, 0); // clear vcb bits
     set_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH, FCB_INVALID); // invalidate fcb entry
