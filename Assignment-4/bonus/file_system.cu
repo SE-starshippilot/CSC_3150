@@ -69,7 +69,7 @@ __device__ void fs_init(FileSystem* fs, uchar* volume, int SUPERBLOCK_SIZE,
   fcb_init(fs);
 
   // create the fcb for root directory
-  fs_gsys(fs, MKDIR, ".\0");
+  fs_gsys(fs, MKDIR, "/\0");
   gtime = 0; // reset gtime
 }
 
@@ -541,6 +541,10 @@ __device__ void fs_gsys(FileSystem* fs, int op)
   case PWD:
   {
     int tcwd = gcwd;
+    if (tcwd == 0) {
+      printf("/\n");
+      break;
+    }
     int tlevel = glevel;
     int* working_dir = new int[tlevel - 1];
     for (int i = 0; i < tlevel - 1; i++) {
