@@ -129,6 +129,33 @@ __device__ void append_parent_content(FileSystem* fs, char* s) {
   delete[] new_parent_content;
 }
 
+__device__ void pop_parent_content(FileSystem* fs, char* s) {
+  int parent_fp = gcwd;
+  if (str_cmp(s, ".\0")) return;
+  int pop_filelength = str_len(s) + 1;
+  int orgn_parent_size = get_file_attr(fs, parent_fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+  char* new_parent_content = new char[orgn_parent_size];
+  fs_read(fs, (uchar*)new_parent_content, orgn_parent_size, (parent_fp << 1) + G_READ);
+  int bits_traversed = 0;
+  while (true) {
+    char* tmp_char = &new_parent_content[bits_traversed];
+    if (str_cmp(tmp_char, s)) {
+      memcpy(new_parent_content + bits_traversed, new_parent_content + bits_traversed + pop_filelength, orgn_parent_size - bits_traversed - pop_filelength);
+      orgn_parent_size -= pop_filelength;
+      set_file_attr(fs, parent_fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH, orgn_parent_size);
+      for (int i = 0; i < orgn_parent_size; i++) {
+        printf("Byte%d is %c", i, new_parent_content[i]);
+      }
+      break;
+    }
+    else {
+      bits_traversed += str_len(tmp_char) + 1;
+    }
+  }
+  fs_write(fs, (uchar*)new_parent_content, orgn_parent_size, (parent_fp << 1) + G_WRITE); // update name info
+  delete[] new_parent_content;
+}
+
 __device__ void set_all_parents_attr(FileSystem* fs, u32 fp, int attr_offset, int attr_length, int value) {
   int raw_parent_fp, parent_fp;
   while (true) {
@@ -407,7 +434,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     int cwd_file_count = 0;
     int cwd_size = get_file_attr(fs, gcwd, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
     char* cwd_conent = new char[cwd_size];
-    fs_read(fs, (uchar*)cwd_conent, cwd_size, (gcwd<<1) + G_READ);
+    fs_read(fs, (uchar*)cwd_conent, cwd_size, (gcwd << 1) + G_READ);
     count_cwd_filenum(fs, cwd_conent, &cwd_file_count, cwd_size);
     if (cwd_file_count == 0) {
       printf("===Sort %d files by modified time===\n", cwd_file_count);
@@ -456,7 +483,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
     int cwd_file_count = 0;
     int cwd_size = get_file_attr(fs, gcwd, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
     char* cwd_conent = new char[cwd_size];
-    fs_read(fs, (uchar*)cwd_conent, cwd_size, (gcwd<<1) + G_READ);
+    fs_read(fs, (uchar*)cwd_conent, cwd_size, (gcwd << 1) + G_READ);
     count_cwd_filenum(fs, cwd_conent, &cwd_file_count, cwd_size);
     if (cwd_file_count == 0) {
       printf("===Sort %d files by size===\n", cwd_file_count);
@@ -504,8 +531,8 @@ __device__ void fs_gsys(FileSystem* fs, int op)
   case CD_P:
   {
     int raw_pd = get_file_attr(fs, gcwd, 0, 2);
-    gcwd = FORMAT_PARENT_FP(raw_pd);
-    if (gcwd) glevel--;
+    gcwd = raw_pd & 0x3FFF;
+    if (gcwd!=1) glevel--;
     break;
   }
   case PWD:
@@ -519,7 +546,7 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       tcwd = FORMAT_PARENT_FP(tparent);
     }
     for (int i = tlevel - 1; i > 0; i--)
-      printf("/%s", get_file_attr(fs, working_dir[i-1], NAME_ATTR_OFFSET));
+      printf("/%s", get_file_attr(fs, working_dir[i - 1], NAME_ATTR_OFFSET));
     printf("\n");
     delete[] working_dir;
     break;
@@ -547,44 +574,48 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
   switch (op) {
   case RM:
   {
-    if (FILE_STATUS(get_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH)) == DIR) {
+    int file_status = get_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH);
+    if (((file_status & 0x4000) >> 14)) {
       printf("Cannot delete a directory using RM,\n");
       return;
     }
     vcb_set(fs, query.FCB_index, 0);
     set_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH, FCB_INVALID);
+    pop_parent_content(fs, s);
     gfilenum--;
     break;
   }
   case RM_RF:
-  {if (FILE_STATUS(get_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH)) != DIR) {
-    printf("Cannot delete a file using RM_RF.\n");
-    return;
-  }
-  else if (query.FCB_index == 0) {
-    printf("Cannot remove root directory.\n");
-    return;
-  }
-  int dir_size = get_file_attr(fs, query.FCB_index, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH), read_size = 0;
-  uchar* dir_content = new uchar[dir_size];
-  fs_read(fs, dir_content, dir_size, query.empty_index << 1);
-  while (read_size != dir_size) {
-    char* t_name = (char*)dir_content;
-    FCBQuery t_query = search_file(fs, t_name);
-    int t_fp = t_query.FCB_index;
-    if (FILE_STATUS(get_file_attr(fs, t_fp, 0, MISC_ATTR_LENGTH)) == DIR) {
-      fs_gsys(fs, RM_RF, t_name); // recursively remove all the files within the directory
+  {
+    int file_status = get_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH);
+    if (((file_status & 0x4000) >> 14) == 0) {
+      printf("Cannot delete a file using RM_RF.\n");
+      return;
     }
-    else {
-      fs_gsys(fs, RM, t_name);
+    else if (query.FCB_index == 0) {
+      printf("Cannot remove root directory.\n");
+      return;
     }
-    read_size += str_len(t_name);
-  }
-  vcb_set(fs, query.FCB_index, 0); // clear vcb bits
-  set_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH, FCB_INVALID); // invalidate fcb entry
-  gfilenum--; // decrease file numbers
-  delete[] dir_content;
-  break;
+    int dir_size = get_file_attr(fs, query.FCB_index, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH), read_size = 0;
+    uchar* dir_content = new uchar[dir_size];
+    fs_read(fs, dir_content, dir_size, (query.FCB_index << 1) + G_READ);
+    while (read_size != dir_size) {
+      char* t_name = (char*)dir_content;
+      FCBQuery t_query = search_file(fs, t_name);
+      int t_fp = t_query.FCB_index;
+      if (FILE_STATUS(get_file_attr(fs, t_fp, 0, MISC_ATTR_LENGTH)) == DIR) {
+        fs_gsys(fs, RM_RF, t_name); // recursively remove all the files within the directory
+      }
+      else {
+        fs_gsys(fs, RM, t_name);
+      }
+      read_size += str_len(t_name);
+    }
+    vcb_set(fs, query.FCB_index, 0); // clear vcb bits
+    set_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH, FCB_INVALID); // invalidate fcb entry
+    gfilenum--; // decrease file numbers
+    delete[] dir_content;
+    break;
   }
   case CD:
   {
@@ -594,7 +625,9 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
     gcwd = query.FCB_index;
     glevel++;
     break;
+  }
   case MKDIR:
+  {
     if (gfilenum == fs->MAX_FILE_NUM || query.empty_index == FP_INVALID) {
       printf("Cannot create more directoryes.\n");
       return;
@@ -612,8 +645,10 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
     break;
   }
   default:
+  {
     printf("Invalid operation code [%d]\n", op);
     break;
+  }
   }
 }
 
