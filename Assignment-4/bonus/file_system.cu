@@ -386,6 +386,16 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
   return 0;
 }
 
+__device__ void count_cwd_filenum(FileSystem* fs, char* cwd_content, int* cwd_file_count, int cwd_content_size) {
+  while (cwd_content_size) {
+    char* curr_filename = cwd_content;
+    int curr_filename_length = str_len(curr_filename) + 1;
+    (*cwd_file_count)++;
+    cwd_content_size -= curr_filename_length;
+    cwd_content += curr_filename_length;
+  }
+}
+
 __device__ void fs_gsys(FileSystem* fs, int op)
 {
   /* Implement LS_D and LS_S operation here */
@@ -393,21 +403,26 @@ __device__ void fs_gsys(FileSystem* fs, int op)
   {
   case LS_D:
   {
-    int* fcb_arr = new int[gfilenum - 1];
-    int* modtime_arr = new int[gfilenum - 1];
-    int files_found = 0;
-    for (int i = 1; i < fs->FCB_ENTRIES; i++) {
-      if (get_file_attr(fs, i, 0, MISC_ATTR_LENGTH) >> 15) {
-        fcb_arr[files_found] = i;
-        modtime_arr[files_found] = get_file_attr(fs, i, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
-        files_found++;
-      }
-      if (files_found == gfilenum - 1) break;
+    int cwd_file_count = 0;
+    int cwd_size = get_file_attr(fs, gcwd, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+    char* cwd_conent = new char[cwd_size];
+    fs_read(fs, (uchar*)cwd_conent, cwd_size, gcwd);
+    count_cwd_filenum(fs, cwd_conent, &cwd_file_count, cwd_size);
+    int* fcb_arr = new int[cwd_file_count];
+    int* modtime_arr = new int[cwd_file_count];
+    int bytes_traversed = 0;
+    for (int i = 0; i < cwd_file_count; i++) {
+      char* curr_file_name = &cwd_conent[bytes_traversed];
+      int curr_file_name_length = str_len(curr_file_name);
+      FCBQuery curr_query = search_file(fs, curr_file_name);
+      fcb_arr[i] = curr_query.FCB_index;
+      modtime_arr[i] = get_file_attr(fs, curr_query.FCB_index, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
+      bytes_traversed += (str_len(curr_file_name) + 1);
     }
-    for (int i = 0; i < gfilenum - 1; i++) {
-      if (gfilenum <= 2) break;
+    for (int i = 0; i < cwd_file_count; i++) {
+      if (cwd_file_count == 1) break;
       int curr_max = i;
-      for (int j = i + 1; j < gfilenum - 1; j++) {
+      for (int j = i + 1; j < cwd_file_count; j++) {
         if (modtime_arr[curr_max] < modtime_arr[j]) {
           curr_max = j;
         }
@@ -419,33 +434,39 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       fcb_arr[i] = fcb_arr[curr_max];
       fcb_arr[curr_max] = tmp;
     }
-    printf("===Sort %d files by modified time===\n", gfilenum - 1);
-    for (int i = 0; i < gfilenum - 1; i++) {
+    printf("===Sort %d files by modified time===\n", cwd_file_count);
+    for (int i = 0; i < cwd_file_count; i++) {
       int file_status = get_file_attr(fs, fcb_arr[i], 0, MISC_ATTR_LENGTH);
       char is_dir = (file_status & 0x4000) ? 'd' : ' ';
       printf("%-20s\t%-8d\t%c\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET), modtime_arr[i], is_dir);
     }
     delete[] fcb_arr;
     delete[] modtime_arr;
+    delete[] cwd_conent;
     break;
   }
   case LS_S:
   {
-    int* fcb_arr = new int[gfilenum - 1];
-    int* size_arr = new int[gfilenum - 1];
-    int files_found = 0;
-    for (int i = 1; i < fs->FCB_ENTRIES; i++) {
-      if (get_file_attr(fs, i, 0, MISC_ATTR_LENGTH) >> 15) {
-        fcb_arr[files_found] = i;
-        size_arr[files_found] = get_file_attr(fs, i, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
-        files_found++;
-      }
-      if (files_found == gfilenum - 1) break;
+    int cwd_file_count = 0;
+    int cwd_size = get_file_attr(fs, gcwd, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+    char* cwd_conent = new char[cwd_size];
+    fs_read(fs, (uchar*)cwd_conent, cwd_size, gcwd);
+    count_cwd_filenum(fs, cwd_conent, &cwd_file_count, cwd_size);
+    int* fcb_arr = new int[cwd_file_count];
+    int* size_arr = new int[cwd_file_count];
+    int bytes_traversed = 0;
+    for (int i = 0; i < cwd_file_count; i++) {
+      char* curr_file_name = &cwd_conent[bytes_traversed];
+      int curr_file_name_length = str_len(curr_file_name);
+      FCBQuery curr_query = search_file(fs, curr_file_name);
+      fcb_arr[i] = curr_query.FCB_index;
+      size_arr[i] = get_file_attr(fs, curr_query.FCB_index, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
+      bytes_traversed += (str_len(curr_file_name) + 1);
     }
-    for (int i = 0; i < gfilenum - 1; i++) {
-      if (gfilenum <= 2) break;
+    for (int i = 0; i < cwd_file_count; i++) {
+      if (cwd_file_count == 1) break;
       int curr_max = i;
-      for (int j = i + 1; j < gfilenum - 1; j++) {
+      for (int j = i + 1; j < cwd_file_count; j++) {
         if (size_arr[curr_max] < size_arr[j] ||
           (size_arr[curr_max] == size_arr[j] && (get_file_attr(fs, fcb_arr[curr_max], CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH) > get_file_attr(fs, fcb_arr[j], CREATE_TIME_ATTR_OFFSET, CREATE_TIME_ATTR_LENGTH)))
           ) {
@@ -459,12 +480,13 @@ __device__ void fs_gsys(FileSystem* fs, int op)
       fcb_arr[i] = fcb_arr[curr_max];
       fcb_arr[curr_max] = temp;
     }
-    printf("===Sort %d files by size===\n", gfilenum-1);
-    for (int i = 0; i < gfilenum - 1; i++) {
+    printf("===Sort %d files by size===\n", cwd_file_count);
+    for (int i = 0; i < cwd_file_count; i++) {
       int file_status = get_file_attr(fs, fcb_arr[i], 0, MISC_ATTR_LENGTH);
       char is_dir = (file_status & 0x4000) ? 'd' : ' ';
       printf("%-20s\t%-8d\t%c\n", get_file_attr(fs, fcb_arr[i], NAME_ATTR_OFFSET), get_file_attr(fs, fcb_arr[i], SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH), is_dir);
     }
+    delete[] cwd_conent;
     delete[] fcb_arr;
     delete[] size_arr;
     break;
@@ -556,7 +578,7 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
   }
   case CD:
   {
-    if (get_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH)&0x4000 == 0) {
+    if (get_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH) & 0x4000 == 0) {
       printf("Cannot CD into a file.\n");
     }
     gcwd = query.FCB_index;
@@ -586,12 +608,14 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
 }
 
 __device__ void file_diagnose(FileSystem* fs, u32 fp) {
-  int fcb_status = get_file_attr(fs, fp, 0, MISC_ATTR_LENGTH) & 0xc000;
-  if (fcb_status == FCB_INVALID) {
+  int fcb_status = get_file_attr(fs, fp, 0, MISC_ATTR_LENGTH);
+  if ((fcb_status >> 15) == FCB_INVALID) {
     printf("Index:%-4d: invalid.\n", fp);
     return;
   }
-  char is_file = (fcb_status == DIR) ? 'd' : 'f';
+  char is_file = ((fcb_status & 0x4000)>>14) ? 'd' : 'f';
+  int parent_fcb = fcb_status & 0x3fff;
+  char* parent_name = get_file_attr(fs, parent_fcb, NAME_ATTR_OFFSET);
   char* file_name = get_file_attr(fs, fp, NAME_ATTR_OFFSET);
   short file_modtime = get_file_attr(fs, fp, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH);
   int file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
@@ -605,14 +629,14 @@ __device__ void file_diagnose(FileSystem* fs, u32 fp) {
     file_startblock = -1;
     file_endblock = -1;
   }
-  printf("Index:%-4d\tFile name:%-20s\tType:%c\tSize:%-10d\tStarts on block:%-5d\tEnds on block:%-5d\tTime created:%-5d\tTime modified:%-5d\n", fp, file_name, is_file, file_size, file_startblock, file_endblock, file_createtime, file_modtime);
+  printf("Index:%-4d\tFile name:%-20s\tType:%c\tParent:%-20s\tSize:%-10d\tStart block:%-5d\tEnd block:%-5d\tTime created:%-5d\tTime modified:%-5d\n", fp, file_name, is_file, parent_name, file_size, file_startblock, file_endblock, file_createtime, file_modtime);
 }
 
 __device__ void fs_diagnose(FileSystem* fs) {
   printf("===File System Diagnose===\n");
   printf("Current system time:%d\n", gtime);
   printf("Current file  count:%d\n", gfilenum);
-  printf("Current working dir:\n");
+  printf("Current working dir:");
   fs_gsys(fs, PWD);
   for (int i = 0; i < fs->FCB_ENTRIES; i++) {
     file_diagnose(fs, i);
