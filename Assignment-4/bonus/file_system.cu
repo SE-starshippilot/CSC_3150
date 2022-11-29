@@ -606,8 +606,6 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
     fs_gsys(fs, CD, s); // cd into the directory
     while (bytes_traversed != dir_size) { // delete all files/subdirectories
       char* t_name = &dir_content[bytes_traversed];
-      printf("Conducting fs_diagnose before removing %s\n", t_name);
-      fs_diagnose(fs);
       FCBQuery t_query = search_file(fs, t_name);
       int t_fp = t_query.FCB_index;
       int file_status = get_file_attr(fs, t_fp, 0, MISC_ATTR_LENGTH);
@@ -618,18 +616,16 @@ __device__ void fs_gsys(FileSystem* fs, int op, char* s)
         fs_gsys(fs, RM, t_name);
       }
       bytes_traversed += str_len(t_name)+1;
-      printf("Conducting fs_diagnose after removing %s\n", t_name);
-      fs_diagnose(fs);
     }
-    printf("Conducting fs_diagnose after removing all\n");
-    fs_diagnose(fs);
     fs_gsys(fs, CD_P); // cd back to the parent directory
     vcb_set(fs, query.FCB_index, 0); // clear vcb bits
     set_file_attr(fs, query.FCB_index, 0, MISC_ATTR_LENGTH, FCB_INVALID); // invalidate fcb entry
-    gfilenum--; // decrease by 1 (deleting the directory itself)
     gtime = ttime;
-    set_file_parent_attr(fs, query.FCB_index, MODIFY_TIME_ATTR_OFFSET, MODIFY_TIME_ATTR_LENGTH, gtime);
+    pop_parent_content(fs, s); // remove the directory from the parent directory
+    gfilenum--; // decrease by 1 (deleting the directory itself)
     gtime++;
+    printf("Conducting fs_diagnose after removing all\n");
+    fs_diagnose(fs);
     delete[] dir_content;
     break;
   }
