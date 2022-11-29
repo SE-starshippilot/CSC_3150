@@ -125,7 +125,7 @@ __device__ void append_parent_content(FileSystem* fs, char* s) {
   }
   memcpy(new_parent_content + orgn_parent_size, s, new_filename_length);
   memset(new_parent_content + orgn_parent_size + new_filename_length, 0, 1);
-  fs_write(fs, (uchar*)new_parent_content, orgn_parent_size + new_filename_length + 1, (parent_fp >> 1) + 1); // update name info
+  fs_write(fs, (uchar*)new_parent_content, orgn_parent_size + new_filename_length + 1, (parent_fp << 1) + G_WRITE); // update name info
   delete[] new_parent_content;
 }
 
@@ -148,9 +148,10 @@ __device__ FCBQuery search_file(FileSystem* fs, char* s) {
   int valid_fcb_traversed = 0;
   for (u32 i = 0; i < fs->FCB_ENTRIES; i++) {
     int file_status = get_file_attr(fs, i, 0, MISC_ATTR_LENGTH);
+    int file_parent = file_status & 0x3fff;
     if (file_status >> 15) { // valid bit is set
       valid_fcb_traversed++;
-      if (str_cmp(s, get_file_attr(fs, i, NAME_ATTR_OFFSET))) {
+      if (str_cmp(s, get_file_attr(fs, i, NAME_ATTR_OFFSET)) && file_parent == gcwd) {
         ret_val.FCB_index = i;
         break;
       }
@@ -352,7 +353,7 @@ __device__ u32 fs_write(FileSystem* fs, uchar* input, u32 size, u32 fp)
     return 1;
   }
   u32 orgn_file_size = get_file_attr(fs, fp, SIZE_ATTR_OFFSET, SIZE_ATTR_LENGTH);
-  int orgn_pos_max_size = floor((float)orgn_file_size / fs->STORAGE_BLOCK_SIZE) * fs->STORAGE_BLOCK_SIZE; // the maximum size the previous location can hold 
+  int orgn_pos_max_size = ceil((float)orgn_file_size / fs->STORAGE_BLOCK_SIZE) * fs->STORAGE_BLOCK_SIZE; // the maximum size the previous location can hold 
   u32 new_file_start_block;
   if (size < orgn_file_size) { // If the new size is smaller than the original file, clear VCB and set according to new size
     vcb_set(fs, fp, 0); // clear the VCB bits
